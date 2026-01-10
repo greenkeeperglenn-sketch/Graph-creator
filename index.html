@@ -6,7 +6,7 @@
     <title>STRI R&D Graph Generator</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -1753,16 +1753,20 @@
                 // Longer delay to ensure fonts and rendering are complete
                 await new Promise(resolve => setTimeout(resolve, 300));
 
-                // Capture the container with font embedding
-                const blob = await domtoimage.toBlob(container, {
+                // Capture the container with html2canvas (better font support)
+                const canvas = await html2canvas(container, {
                     width: 1200,
                     height: 600,
-                    style: {
-                        'transform': 'none',
-                        'transform-origin': 'top left'
-                    },
-                    bgcolor: '#0f0f1a',
-                    cacheBust: true
+                    backgroundColor: '#0f0f1a',
+                    scale: 2, // Higher resolution
+                    useCORS: true,
+                    allowTaint: true,
+                    logging: false
+                });
+
+                // Convert canvas to blob
+                const blob = await new Promise(resolve => {
+                    canvas.toBlob(resolve, 'image/png');
                 });
 
                 // Restore original styles
