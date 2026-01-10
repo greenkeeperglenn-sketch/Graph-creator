@@ -1753,13 +1753,13 @@
 
                 // Capture the container with html2canvas (better font support)
                 const canvas = await html2canvas(container, {
-                    width: 1200,
-                    height: 600,
-                    backgroundColor: '#0f0f1a',
+                    backgroundColor: null, // Transparent background
                     scale: 2, // Higher resolution
                     useCORS: true,
                     allowTaint: true,
-                    logging: false
+                    logging: false,
+                    windowWidth: container.scrollWidth,
+                    windowHeight: container.scrollHeight
                 });
 
                 // Convert canvas to blob
