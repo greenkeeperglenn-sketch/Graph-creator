@@ -1727,6 +1727,7 @@
                 // Store original styles
                 const originalWidth = container.style.width;
                 const originalHeight = container.style.height;
+                const originalBackground = container.style.background;
                 const legendPanel = container.querySelector('.legend-panel');
                 const originalLegendWidth = legendPanel.style.width;
                 const divider = container.querySelector('.divider');
@@ -1735,6 +1736,8 @@
                 // Apply fixed dimensions for consistent output
                 container.style.width = '1200px';
                 container.style.height = '600px';
+                // Make background solid for screenshot (matches the semi-transparent grey)
+                container.style.background = '#1a1a2e';
                 legendPanel.style.width = '300px';
                 legendPanel.style.minWidth = '300px';
                 divider.style.display = 'none';
@@ -1753,15 +1756,11 @@
 
                 // Capture the container with html2canvas (better font support)
                 const canvas = await html2canvas(container, {
-                    backgroundColor: '#0f0f1a', // Match body background
+                    backgroundColor: null, // Transparent so we only get the container
                     scale: 2, // Higher resolution
                     useCORS: true,
                     allowTaint: true,
-                    logging: false,
-                    width: 1200,
-                    height: 600,
-                    x: 0,
-                    y: 0
+                    logging: false
                 });
 
                 // Convert canvas to blob
@@ -1772,6 +1771,7 @@
                 // Restore original styles
                 container.style.width = originalWidth;
                 container.style.height = originalHeight;
+                container.style.background = originalBackground;
                 legendPanel.style.width = originalLegendWidth;
                 legendPanel.style.minWidth = '';
                 divider.style.display = originalDividerDisplay;
