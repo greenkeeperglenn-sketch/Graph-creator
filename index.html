@@ -1720,9 +1720,12 @@
                 // Wait for fonts to be ready
                 await document.fonts.ready;
 
+                // Additional delay to ensure fonts are fully loaded
+                await new Promise(resolve => setTimeout(resolve, 200));
+
                 // Get the resizable container (graph + legend)
                 const container = document.querySelector('#content_' + tabId + ' .resizable-container');
-                
+
                 // Store original styles
                 const originalWidth = container.style.width;
                 const originalHeight = container.style.height;
@@ -1741,16 +1744,16 @@
                 // Resize Plotly chart to fit new dimensions
                 await new Promise(resolve => {
                     Plotly.Plots.resize('graphPlot_' + tabId);
-                    setTimeout(resolve, 100);
+                    setTimeout(resolve, 200);
                 });
 
                 // Re-add timeline line at correct position
                 addTimelineLine(tabId, tab.currentDateIndex);
-                
-                // Small delay to ensure rendering is complete
-                await new Promise(resolve => setTimeout(resolve, 150));
 
-                // Capture the container
+                // Longer delay to ensure fonts and rendering are complete
+                await new Promise(resolve => setTimeout(resolve, 300));
+
+                // Capture the container with font embedding
                 const blob = await domtoimage.toBlob(container, {
                     width: 1200,
                     height: 600,
@@ -1758,7 +1761,8 @@
                         'transform': 'none',
                         'transform-origin': 'top left'
                     },
-                    bgcolor: '#0f0f1a'
+                    bgcolor: '#0f0f1a',
+                    cacheBust: true
                 });
 
                 // Restore original styles
