@@ -632,9 +632,7 @@
         .legend-date-display {
             font-size: 1em;
             font-weight: 700;
-            background: linear-gradient(135deg, #10b981, #6366f1);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: rgba(255,255,255,0.9);
             text-align: center;
             padding: 8px 0;
             margin-bottom: 8px;
@@ -1471,9 +1469,9 @@
             }));
 
             Plotly.newPlot(plotEl, traces, {
-                title: { text: tab.graphTitle, font: { size: 28, color: 'rgba(255,255,255,0.95)', family: 'Montserrat', weight: 'bold' }, x: 0.5, xanchor: 'center', y: 0.95, yanchor: 'top' },
-                xaxis: { title: { text: tab.xAxisLabel, font: { size: 12, color: 'rgba(255,255,255,0.6)' } }, showgrid: true, gridcolor: 'rgba(255,255,255,0.05)', tickangle: -45, tickfont: { size: 10, color: 'rgba(255,255,255,0.5)' } },
-                yaxis: { title: { text: tab.yAxisLabel, font: { size: 12, color: 'rgba(255,255,255,0.6)' } }, range: [tab.yAxisMin, tab.yAxisMax], showgrid: true, gridcolor: 'rgba(255,255,255,0.05)', tickfont: { size: 10, color: 'rgba(255,255,255,0.5)' }, ticksuffix: tickSuffix },
+                title: { text: tab.graphTitle, font: { size: 28, color: 'rgba(255,255,255,0.95)', family: 'Montserrat, sans-serif', weight: 700 }, x: 0.5, xanchor: 'center', y: 0.95, yanchor: 'top' },
+                xaxis: { title: { text: tab.xAxisLabel, font: { size: 12, color: 'rgba(255,255,255,0.6)', family: 'Montserrat, sans-serif' } }, showgrid: true, gridcolor: 'rgba(255,255,255,0.05)', tickangle: -45, tickfont: { size: 10, color: 'rgba(255,255,255,0.5)', family: 'Montserrat, sans-serif' } },
+                yaxis: { title: { text: tab.yAxisLabel, font: { size: 12, color: 'rgba(255,255,255,0.6)', family: 'Montserrat, sans-serif' } }, range: [tab.yAxisMin, tab.yAxisMax], showgrid: true, gridcolor: 'rgba(255,255,255,0.05)', tickfont: { size: 10, color: 'rgba(255,255,255,0.5)', family: 'Montserrat, sans-serif' }, ticksuffix: tickSuffix },
                 plot_bgcolor: 'rgba(0,0,0,0)',
                 paper_bgcolor: 'rgba(0,0,0,0)',
                 showlegend: false,
