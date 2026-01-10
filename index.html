@@ -1,0 +1,1800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STRI R&D Graph Generator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+            color: #e0e0e0;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: radial-gradient(circle at 20% 80%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(16, 185, 129, 0.08) 0%, transparent 50%);
+            animation: bgFloat 20s ease-in-out infinite;
+            z-index: -1;
+        }
+        
+        @keyframes bgFloat {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(2%, 2%); }
+        }
+
+        .header {
+            padding: 15px 30px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-shrink: 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .header-logo { height: 45px; }
+        
+        .header-text h1 { font-size: 1.4em; font-weight: 700; color: #fff; }
+        .header-text .subtitle { color: rgba(255,255,255,0.4); font-size: 0.75em; }
+
+        .header-title {
+            flex: 1;
+            text-align: center;
+            font-size: 1.4em;
+            font-weight: 700;
+            color: #fff;
+            cursor: pointer;
+            padding: 5px 15px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .header-title:hover {
+            background: rgba(255,255,255,0.05);
+        }
+
+        /* Tab Bar */
+        .tab-bar {
+            display: flex;
+            align-items: center;
+            padding: 10px 30px;
+            gap: 8px;
+            background: rgba(0,0,0,0.2);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            flex-shrink: 0;
+            overflow-x: auto;
+            overflow-y: hidden;
+            flex-wrap: nowrap;
+        }
+
+        .tab-bar::-webkit-scrollbar {
+            height: 4px;
+        }
+
+        .tab-bar::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .tab-bar::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+        }
+
+        .tabs-container {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .tab {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            font-size: 0.8em;
+            font-weight: 500;
+            color: rgba(255,255,255,0.6);
+            transition: all 0.2s;
+            white-space: nowrap;
+            min-width: 120px;
+            flex-shrink: 0;
+        }
+
+        .tab:hover { background: rgba(255,255,255,0.08); }
+        
+        .tab.active {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            border-bottom-color: transparent;
+        }
+
+        .tab-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tab-close {
+            width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 14px;
+            color: rgba(255,255,255,0.4);
+            transition: all 0.2s;
+        }
+
+        .tab-close:hover {
+            background: rgba(255,0,0,0.3);
+            color: #fff;
+        }
+
+        .tab-add {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px dashed rgba(16, 185, 129, 0.4);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            color: #10b981;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .tab-add:hover {
+            background: rgba(16, 185, 129, 0.3);
+            border-style: solid;
+        }
+
+        .tab-count {
+            margin-left: auto;
+            padding: 4px 12px;
+            background: rgba(99, 102, 241, 0.2);
+            border-radius: 12px;
+            font-size: 0.7em;
+            color: rgba(255,255,255,0.6);
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+
+        .project-buttons {
+            display: flex;
+            gap: 8px;
+            margin-left: 12px;
+            flex-shrink: 0;
+        }
+
+        .project-btn {
+            padding: 6px 12px;
+            font-size: 0.75em;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 500;
+            background: rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.7);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .project-btn:hover {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+
+        .project-btn.save-btn:hover {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: rgba(16, 185, 129, 0.4);
+            color: #10b981;
+        }
+
+        .project-btn.load-btn:hover {
+            background: rgba(99, 102, 241, 0.2);
+            border-color: rgba(99, 102, 241, 0.4);
+            color: #6366f1;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            padding: 20px 30px;
+            gap: 20px;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        /* Input Panel */
+        .input-panel {
+            width: 420px;
+            min-width: 350px;
+            display: flex;
+            flex-direction: column;
+            background: rgba(255,255,255,0.03);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.08);
+            overflow: hidden;
+            flex-shrink: 0;
+            transition: width 0.3s ease, min-width 0.3s ease, opacity 0.3s ease;
+        }
+
+        .input-panel.collapsed {
+            width: 50px;
+            min-width: 50px;
+        }
+
+        .input-panel.collapsed .input-body {
+            display: none;
+        }
+
+        .input-panel.collapsed .input-header h3 {
+            display: none;
+        }
+
+        .input-panel.collapsed .collapse-btn {
+            transform: rotate(180deg);
+        }
+
+        .input-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .input-header h3 {
+            font-size: 0.85em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: rgba(255,255,255,0.5);
+            margin: 0;
+        }
+
+        .collapse-btn {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 6px;
+            color: rgba(255,255,255,0.6);
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .collapse-btn:hover {
+            background: rgba(255,255,255,0.12);
+            color: #fff;
+        }
+
+        .input-body {
+            flex: 1;
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+        }
+
+        .input-group { display: flex; flex-direction: column; gap: 6px; }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .input-group label {
+            font-size: 0.7em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: rgba(255,255,255,0.4);
+        }
+
+        .input-group input, .input-group select {
+            padding: 10px 14px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: #fff;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.85em;
+        }
+
+        .input-group select {
+            cursor: pointer;
+        }
+
+        .input-group select option {
+            background: #1a1a2e;
+            color: #fff;
+        }
+
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: rgba(16, 185, 129, 0.5);
+        }
+
+        .input-group textarea {
+            flex: 1;
+            min-height: 150px;
+            padding: 14px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: #fff;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.75em;
+            line-height: 1.5;
+            resize: none;
+        }
+
+        .input-group textarea.locked {
+            opacity: 0.3;
+            pointer-events: none;
+        }
+
+        .input-group textarea:focus {
+            outline: none;
+            border-color: rgba(16, 185, 129, 0.5);
+        }
+
+        .percent-toggle {
+            margin-top: 6px;
+            padding: 6px 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 6px;
+            color: rgba(255,255,255,0.4);
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.8em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .percent-toggle.active {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: rgba(16, 185, 129, 0.5);
+            color: #10b981;
+        }
+
+        .percent-toggle:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .percent-toggle.active:hover {
+            background: rgba(16, 185, 129, 0.3);
+        }
+
+        .password-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 15, 26, 0.95);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        .password-overlay.hidden {
+            display: none;
+        }
+
+        .password-box {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .password-box p {
+            color: rgba(255,255,255,0.6);
+            font-size: 0.8em;
+            margin-bottom: 12px;
+        }
+
+        .password-box input {
+            padding: 8px 12px;
+            background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 6px;
+            color: #fff;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.85em;
+            margin-right: 8px;
+            width: 120px;
+        }
+
+        .password-box input:focus {
+            outline: none;
+            border-color: rgba(16, 185, 129, 0.5);
+        }
+
+        .password-box button {
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border: none;
+            border-radius: 6px;
+            color: #fff;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.8em;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .password-box button:hover {
+            opacity: 0.9;
+        }
+
+        .input-group {
+            position: relative;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .btn-primary {
+            flex: 1;
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 600;
+            font-size: 0.85em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-secondary {
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: rgba(255,255,255,0.6);
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 500;
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+
+        .status {
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.75em;
+            display: none;
+        }
+
+        .status.success {
+            display: block;
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #10b981;
+        }
+
+        .status.error {
+            display: block;
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+        }
+
+        /* Graph Area */
+        .graph-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .resizable-container {
+            flex: 1;
+            display: flex;
+            background: rgba(255,255,255,0.03);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.08);
+            overflow: hidden;
+        }
+
+        .graph-panel {
+            flex: 1;
+            min-width: 400px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .graph-plot {
+            flex: 1;
+            width: 100%;
+            min-height: 300px;
+        }
+
+        .divider {
+            width: 12px;
+            background: rgba(255,255,255,0.03);
+            cursor: col-resize;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .divider:hover { background: rgba(99,102,241,0.2); }
+
+        .divider-grip {
+            width: 4px;
+            height: 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .divider-grip span {
+            width: 4px;
+            height: 4px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 50%;
+        }
+
+        .legend-panel {
+            width: 280px;
+            min-width: 220px;
+            max-width: 400px;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+            overflow: hidden;
+        }
+
+        .legend-title-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .legend-title {
+            font-size: 0.7em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: rgba(255,255,255,0.4);
+        }
+
+        .toggle-btn {
+            padding: 4px 10px;
+            font-size: 0.6em;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 600;
+            background: rgba(255,255,255,0.08);
+            color: rgba(255,255,255,0.5);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .toggle-btn:hover {
+            background: rgba(255,255,255,0.12);
+            color: rgba(255,255,255,0.8);
+        }
+
+        .legend-date-display {
+            font-size: 1em;
+            font-weight: 700;
+            background: linear-gradient(135deg, #10b981, #6366f1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+            padding: 8px 0;
+            margin-bottom: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .legend-content {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .legend-empty {
+            padding: 20px;
+            text-align: center;
+            color: rgba(255,255,255,0.3);
+            font-size: 0.8em;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 6px;
+            gap: 8px;
+        }
+
+        .legend-item:hover { background: rgba(255,255,255,0.05); }
+
+        .legend-color {
+            width: 10px;
+            height: 10px;
+            border-radius: 3px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .legend-name {
+            flex: 1;
+            font-size: 0.75em;
+            font-weight: 500;
+            color: rgba(255,255,255,0.8);
+        }
+
+        .legend-value {
+            font-size: 0.7em;
+            font-weight: 600;
+            color: rgba(255,255,255,0.5);
+        }
+
+        /* Footer */
+        .footer-controls {
+            height: 60px;
+            background: rgba(255,255,255,0.03);
+            border-top: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            align-items: center;
+            padding: 0 30px;
+            gap: 15px;
+            margin-top: 15px;
+            border-radius: 12px;
+        }
+
+        .footer-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .footer-section.center { margin: 0 auto; }
+        .footer-section.right { margin-left: auto; }
+
+        .nav-btn {
+            padding: 8px 16px;
+            font-size: 0.75em;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 600;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            min-width: 80px;
+        }
+
+        .nav-btn:hover:not(:disabled) {
+            transform: scale(1.02);
+            box-shadow: 0 2px 10px rgba(16,185,129,0.3);
+        }
+
+        .nav-btn:disabled {
+            background: rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.3);
+            cursor: not-allowed;
+        }
+
+        .date-display {
+            font-size: 1.1em;
+            font-weight: 700;
+            background: linear-gradient(135deg, #10b981, #6366f1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            min-width: 100px;
+            text-align: center;
+        }
+
+        .footer-btn {
+            padding: 8px 14px;
+            font-size: 0.7em;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 500;
+            background: rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.6);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .footer-btn:hover {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+
+        .footer-btn.screenshot-btn {
+            background: rgba(99, 102, 241, 0.15);
+            border-color: rgba(99, 102, 241, 0.3);
+            color: rgba(99, 102, 241, 0.9);
+        }
+
+        .footer-btn.screenshot-btn:hover {
+            background: rgba(99, 102, 241, 0.25);
+            color: #6366f1;
+        }
+
+        .footer-btn.screenshot-btn.copying {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: rgba(16, 185, 129, 0.4);
+            color: #10b981;
+        }
+
+        /* Screenshot mode - fixed dimensions for consistent output */
+        .screenshot-mode .resizable-container {
+            width: 1200px !important;
+            height: 600px !important;
+        }
+
+        .screenshot-mode .graph-panel {
+            flex: 1 !important;
+        }
+
+        .screenshot-mode .legend-panel {
+            width: 300px !important;
+            min-width: 300px !important;
+        }
+
+        .screenshot-mode .divider {
+            display: none !important;
+        }
+
+        .footer-note {
+            font-size: 0.65em;
+            color: rgba(255,255,255,0.3);
+            font-style: italic;
+        }
+
+        .no-select { user-select: none; }
+
+        /* Empty state */
+        .empty-graph {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: rgba(255,255,255,0.3);
+        }
+
+        .empty-graph svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+
+        .empty-graph p {
+            font-size: 0.9em;
+        }
+
+        /* Tab content visibility */
+        .tab-content { display: none; }
+        .tab-content.active { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="assets/logo.png" alt="STRI" class="header-logo">
+        <div class="header-text">
+            <h1>Graph Generator</h1>
+            <p class="subtitle">STRI's Data Visualisation Tool</p>
+        </div>
+        <div class="header-title" id="projectTitle">Untitled Project</div>
+    </div>
+
+    <div class="tab-bar">
+        <div class="tabs-container" id="tabsContainer"></div>
+        <div class="tab-add" onclick="addNewTab()" title="Add new graph">+</div>
+        <div class="tab-count" id="tabCount">0 graphs</div>
+        <div class="project-buttons">
+            <button class="project-btn save-btn" onclick="saveProject()" title="Save Project">💾 Save</button>
+            <button class="project-btn load-btn" onclick="document.getElementById('loadFileInput').click()" title="Load Project">📂 Load</button>
+            <input type="file" id="loadFileInput" accept=".json" style="display:none" onchange="loadProject(event)">
+        </div>
+    </div>
+
+    <div id="tabContents"></div>
+
+    <script>
+        // Global state
+        let tabs = [];
+        let activeTabId = null;
+        let tabCounter = 0;
+        let projectName = 'Untitled Project';
+
+        // Logo for watermark
+        const logoPath = 'assets/logo.png';
+
+        // Editable project title
+        document.getElementById('projectTitle').onclick = function() {
+            const newName = prompt('Enter project name:', projectName);
+            if (newName && newName.trim()) {
+                projectName = newName.trim();
+                document.getElementById('projectTitle').textContent = projectName;
+                autoSave();
+            }
+        };
+
+        const colors = [
+            '#10b981', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6',
+            '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#84cc16',
+            '#a855f7', '#22c55e', '#3b82f6', '#eab308', '#d946ef'
+        ];
+
+        const bracketColors = [
+            '#10b981', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6',
+            '#ec4899', '#14b8a6', '#f97316'
+        ];
+
+        const STORAGE_KEY = 'stri_graph_generator_project';
+
+        // Initialize - load from localStorage or create new tab
+        document.addEventListener('DOMContentLoaded', () => {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try {
+                    const project = JSON.parse(saved);
+                    loadProjectData(project, false);
+                    console.log('Auto-loaded project from localStorage');
+                } catch (e) {
+                    console.warn('Failed to load saved project:', e);
+                    addNewTab();
+                }
+            } else {
+                addNewTab();
+            }
+        });
+
+        // Auto-save to localStorage whenever tabs change
+        function autoSave() {
+            const project = {
+                version: 1,
+                savedAt: new Date().toISOString(),
+                projectName: projectName,
+                tabCounter: tabCounter,
+                activeTabId: activeTabId,
+                tabs: tabs.map(tab => ({
+                    id: tab.id,
+                    name: tab.name,
+                    graphTitle: tab.graphTitle,
+                    yAxisLabel: tab.yAxisLabel,
+                    xAxisLabel: tab.xAxisLabel,
+                    yAxisMin: tab.yAxisMin,
+                    yAxisMax: tab.yAxisMax,
+                    yAxisPercent: tab.yAxisPercent,
+                    treatments: tab.treatments,
+                    dates: tab.dates,
+                    rawData: document.getElementById('dataInput_' + tab.id)?.value || ''
+                }))
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
+        }
+
+        // Save project to JSON file
+        function saveProject() {
+            const project = {
+                version: 1,
+                savedAt: new Date().toISOString(),
+                projectName: projectName,
+                tabCounter: tabCounter,
+                tabs: tabs.map(tab => ({
+                    id: tab.id,
+                    name: tab.name,
+                    graphTitle: tab.graphTitle,
+                    yAxisLabel: tab.yAxisLabel,
+                    xAxisLabel: tab.xAxisLabel,
+                    yAxisMin: tab.yAxisMin,
+                    yAxisMax: tab.yAxisMax,
+                    yAxisPercent: tab.yAxisPercent,
+                    treatments: tab.treatments,
+                    dates: tab.dates,
+                    rawData: document.getElementById('dataInput_' + tab.id)?.value || ''
+                }))
+            };
+            
+            // Use project name in filename
+            const safeName = projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = safeName + '_' + new Date().toISOString().split('T')[0] + '.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Load project from JSON file
+        function loadProject(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const project = JSON.parse(e.target.result);
+                    loadProjectData(project, true);
+                } catch (err) {
+                    alert('Failed to load project: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = ''; // Reset so same file can be loaded again
+        }
+
+        // Load project data (from localStorage or file)
+        function loadProjectData(project, clearExisting) {
+            if (clearExisting) {
+                // Clear existing tabs
+                tabs.forEach(tab => {
+                    document.getElementById('content_' + tab.id)?.remove();
+                });
+                tabs = [];
+            }
+            
+            // Restore project name
+            projectName = project.projectName || 'Untitled Project';
+            document.getElementById('projectTitle').textContent = projectName;
+            
+            tabCounter = project.tabCounter || 0;
+            
+            project.tabs.forEach(savedTab => {
+                const tab = {
+                    id: savedTab.id,
+                    name: savedTab.name,
+                    graphTitle: savedTab.graphTitle || 'Trial Results',
+                    yAxisLabel: savedTab.yAxisLabel || 'Green Coverage (%)',
+                    xAxisLabel: savedTab.xAxisLabel || 'Assessment Date',
+                    yAxisMin: savedTab.yAxisMin ?? 0,
+                    yAxisMax: savedTab.yAxisMax ?? 100,
+                    yAxisPercent: savedTab.yAxisPercent ?? true,
+                    treatments: savedTab.treatments || [],
+                    dates: savedTab.dates || [],
+                    currentDateIndex: 0,
+                    legendAscending: true
+                };
+                
+                tabs.push(tab);
+                createTabContent(tab);
+                
+                // Restore raw data to textarea
+                if (savedTab.rawData) {
+                    document.getElementById('dataInput_' + tab.id).value = savedTab.rawData;
+                }
+                
+                // Restore form values
+                document.getElementById('graphTitle_' + tab.id).value = tab.graphTitle;
+                document.getElementById('yAxisLabel_' + tab.id).value = tab.yAxisLabel;
+                document.getElementById('xAxisLabel_' + tab.id).value = tab.xAxisLabel;
+                document.getElementById('yAxisMin_' + tab.id).value = tab.yAxisMin;
+                document.getElementById('yAxisMax_' + tab.id).value = tab.yAxisMax;
+                const percentBtn = document.getElementById('yAxisPercent_' + tab.id);
+                if (tab.yAxisPercent) {
+                    percentBtn.classList.add('active');
+                } else {
+                    percentBtn.classList.remove('active');
+                }
+                
+                // Recreate graph if there's data
+                if (tab.treatments.length > 0 && tab.dates.length > 0) {
+                    createGraph(tab.id);
+                    updateLegend(tab.id, 0);
+                    updateNavigation(tab.id);
+                    addTimelineLine(tab.id, 0);
+                }
+            });
+            
+            renderTabs();
+            
+            // Switch to first tab or previously active tab
+            const targetTab = project.activeTabId && tabs.find(t => t.id === project.activeTabId) 
+                ? project.activeTabId 
+                : tabs[0]?.id;
+            if (targetTab) {
+                switchToTab(targetTab);
+            }
+            
+            updateTabCount();
+            
+        }
+
+        function addNewTab() {
+            tabCounter++;
+            const tabId = 'tab_' + tabCounter;
+            const tabName = 'Graph ' + tabCounter;
+
+            const tab = {
+                id: tabId,
+                name: tabName,
+                data: null,
+                graphTitle: 'Trial Results',
+                yAxisLabel: 'Green Coverage (%)',
+                xAxisLabel: 'Assessment Date',
+                yAxisMin: 0,
+                yAxisMax: 100,
+                yAxisPercent: true,
+                treatments: [],
+                dates: [],
+                currentDateIndex: 0,
+                legendAscending: true
+            };
+
+            tabs.push(tab);
+            renderTabs();
+            createTabContent(tab);
+            switchToTab(tabId);
+            updateTabCount();
+            autoSave();
+        }
+
+        function renderTabs() {
+            const container = document.getElementById('tabsContainer');
+            container.innerHTML = tabs.map(tab => `
+                <div class="tab ${tab.id === activeTabId ? 'active' : ''}" onclick="switchToTab('${tab.id}')">
+                    <span class="tab-name" ondblclick="renameTab('${tab.id}', this)">${tab.name}</span>
+                    ${tabs.length > 1 ? `<span class="tab-close" onclick="event.stopPropagation(); closeTab('${tab.id}')">×</span>` : ''}
+                </div>
+            `).join('');
+        }
+
+        function createTabContent(tab) {
+            const container = document.getElementById('tabContents');
+            const content = document.createElement('div');
+            content.id = 'content_' + tab.id;
+            content.className = 'tab-content';
+            const collapsedClass = inputPanelsCollapsed ? ' collapsed' : '';
+            content.innerHTML = `
+                <div class="main-content">
+                    <div class="input-panel${collapsedClass}">
+                        <div class="input-header">
+                            <h3>Data Input</h3>
+                            <button class="collapse-btn" onclick="toggleInputPanel()" title="Collapse/expand all panels">◀</button>
+                        </div>
+                        <div class="input-body">
+                            <div class="input-group">
+                                <label>Graph Title</label>
+                                <input type="text" id="graphTitle_${tab.id}" value="${tab.graphTitle}" placeholder="Enter graph title">
+                            </div>
+                            <div class="input-row">
+                                <div class="input-group" style="flex:1;">
+                                    <label>Y-Axis Label</label>
+                                    <input type="text" id="yAxisLabel_${tab.id}" value="${tab.yAxisLabel}" placeholder="Y-axis label">
+                                </div>
+                                <div class="input-group" style="flex:1;">
+                                    <label>X-Axis Label</label>
+                                    <input type="text" id="xAxisLabel_${tab.id}" value="${tab.xAxisLabel}" placeholder="X-axis label">
+                                </div>
+                            </div>
+                            <div class="input-row">
+                                <div class="input-group" style="flex:1;">
+                                    <label>Y Min</label>
+                                    <input type="number" id="yAxisMin_${tab.id}" value="0" placeholder="0">
+                                    <button type="button" class="percent-toggle active" id="yAxisPercent_${tab.id}" onclick="togglePercent('${tab.id}')">%</button>
+                                </div>
+                                <div class="input-group" style="flex:1;">
+                                    <label>Y Max</label>
+                                    <input type="number" id="yAxisMax_${tab.id}" value="100" placeholder="100">
+                                </div>
+                            </div>
+                            <div class="input-group" style="flex:1;">
+                                <label>Paste Data (from Excel/GenStat)</label>
+                                <div class="password-overlay" id="passwordOverlay_${tab.id}">
+                                    <div class="password-box">
+                                        <p>Enter password to access data input</p>
+                                        <input type="password" id="passwordInput_${tab.id}" placeholder="Password" onkeyup="if(event.key==='Enter')checkPassword('${tab.id}')">
+                                        <button type="button" onclick="checkPassword('${tab.id}')">Unlock</button>
+                                    </div>
+                                </div>
+                                <textarea id="dataInput_${tab.id}" class="locked" placeholder="Paste your data here...&#10;&#10;Format: Treatment name, values separated by tabs, then letter groups" disabled></textarea>
+                            </div>
+                            <div id="status_${tab.id}" class="status"></div>
+                            <div class="btn-row">
+                                <button class="btn-primary" onclick="parseAndPlot('${tab.id}')">Generate Graph</button>
+                                <button class="btn-secondary" onclick="clearInput('${tab.id}')">Clear</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="graph-area">
+                        <div class="resizable-container">
+                            <div class="graph-panel">
+                                <div class="graph-plot" id="graphPlot_${tab.id}">
+                                    <div class="empty-graph">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                            <path d="M3 3v18h18M7 14l4-4 4 4 5-5"/>
+                                        </svg>
+                                        <p>Paste data and click Generate</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="divider" id="divider_${tab.id}">
+                                <div class="divider-grip"><span></span><span></span><span></span></div>
+                            </div>
+                            <div class="legend-panel" id="legendPanel_${tab.id}">
+                                <div class="legend-title-row">
+                                    <span class="legend-title">Treatments (ranked)</span>
+                                    <button class="toggle-btn" id="toggleBtn_${tab.id}" onclick="toggleSort('${tab.id}')">↑ Low - Top</button>
+                                </div>
+                                <div class="legend-date-display" id="legendDateDisplay_${tab.id}">-</div>
+                                <div class="legend-content" id="legendContent_${tab.id}">
+                                    <div class="legend-empty">Generate a graph to see rankings</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="footer-controls">
+                            <div class="footer-section">
+                                <button class="footer-btn screenshot-btn" onclick="screenshotToClipboard('${tab.id}')" title="Copy screenshot to clipboard">📋 Copy</button>
+                                <button class="footer-btn" onclick="resetZoom('${tab.id}')">🔍 Reset</button>
+                            </div>
+                            <div class="footer-section center">
+                                <button class="nav-btn" id="prevBtn_${tab.id}" onclick="navigateDate('${tab.id}', -1)" disabled>← Prev</button>
+                                <div class="date-display" id="dateDisplay_${tab.id}">-</div>
+                                <button class="nav-btn" id="nextBtn_${tab.id}" onclick="navigateDate('${tab.id}', 1)" disabled>Next →</button>
+                            </div>
+                            <div class="footer-section right">
+                                <span class="footer-note">Brackets = not significantly different</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.appendChild(content);
+            setupDivider(tab.id);
+            setupInputListeners(tab.id);
+        }
+
+        function setupInputListeners(tabId) {
+            const textarea = document.getElementById('dataInput_' + tabId);
+            textarea.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.key === 'Enter') {
+                    parseAndPlot(tabId);
+                }
+            });
+        }
+
+        function switchToTab(tabId) {
+            activeTabId = tabId;
+            
+            // Update tab styles
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.tab[onclick*="${tabId}"]`)?.classList.add('active');
+            
+            // Update content visibility
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById('content_' + tabId)?.classList.add('active');
+            
+            // Resize plot if exists
+            const tab = tabs.find(t => t.id === tabId);
+            if (tab && tab.dates.length > 0) {
+                setTimeout(() => {
+                    Plotly.Plots.resize('graphPlot_' + tabId);
+                    addTimelineLine(tabId, tab.currentDateIndex);
+                }, 50);
+            }
+            
+            renderTabs();
+            
+        }
+
+        function togglePercent(tabId) {
+            const btn = document.getElementById('yAxisPercent_' + tabId);
+            btn.classList.toggle('active');
+            const tab = tabs.find(t => t.id === tabId);
+            if (tab) {
+                tab.yAxisPercent = btn.classList.contains('active');
+            }
+        }
+
+        function checkPassword(tabId) {
+            const input = document.getElementById('passwordInput_' + tabId);
+            const overlay = document.getElementById('passwordOverlay_' + tabId);
+            const textarea = document.getElementById('dataInput_' + tabId);
+            
+            console.log('Checking password for tab:', tabId, 'Value:', input.value);
+            
+            if (input.value === 'STRI123') {
+                console.log('Password correct!');
+                overlay.style.display = 'none';
+                textarea.classList.remove('locked');
+                textarea.disabled = false;
+                textarea.focus();
+            } else {
+                console.log('Password incorrect');
+                input.value = '';
+                input.placeholder = 'Incorrect password';
+                input.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+                setTimeout(() => {
+                    input.placeholder = 'Password';
+                    input.style.borderColor = '';
+                }, 2000);
+            }
+        }
+
+        function closeTab(tabId) {
+            if (tabs.length <= 1) return;
+            
+            const idx = tabs.findIndex(t => t.id === tabId);
+            tabs.splice(idx, 1);
+            
+            document.getElementById('content_' + tabId)?.remove();
+            
+            if (activeTabId === tabId) {
+                const newIdx = Math.min(idx, tabs.length - 1);
+                switchToTab(tabs[newIdx].id);
+            }
+            
+            renderTabs();
+            updateTabCount();
+            
+            autoSave();
+        }
+
+        function renameTab(tabId, element) {
+            const tab = tabs.find(t => t.id === tabId);
+            const newName = prompt('Enter new name:', tab.name);
+            if (newName && newName.trim()) {
+                tab.name = newName.trim();
+                renderTabs();
+                autoSave();
+            }
+        }
+
+        function updateTabCount() {
+            const count = tabs.filter(t => t.dates.length > 0).length;
+            document.getElementById('tabCount').textContent = count + ' graph' + (count !== 1 ? 's' : '') + ' ready';
+        }
+
+        function parseAndPlot(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            const input = document.getElementById('dataInput_' + tabId).value.trim();
+            const statusEl = document.getElementById('status_' + tabId);
+            
+            tab.graphTitle = document.getElementById('graphTitle_' + tabId).value || 'Trial Results';
+            tab.yAxisLabel = document.getElementById('yAxisLabel_' + tabId).value || 'Green Coverage (%)';
+            tab.xAxisLabel = document.getElementById('xAxisLabel_' + tabId).value || 'Assessment Date';
+            tab.yAxisMin = parseFloat(document.getElementById('yAxisMin_' + tabId).value) || 0;
+            tab.yAxisMax = parseFloat(document.getElementById('yAxisMax_' + tabId).value) || 100;
+            tab.yAxisPercent = document.getElementById('yAxisPercent_' + tabId).classList.contains('active');
+
+            if (!input) {
+                statusEl.className = 'status error';
+                statusEl.textContent = 'Please paste some data first';
+                return;
+            }
+
+            try {
+                const lines = input.split('\n').filter(l => l.trim());
+                if (lines.length < 2) throw new Error('Need at least header and one data row');
+
+                const headerParts = lines[0].split('\t').map(h => h.trim());
+                
+                // Find the first column that looks like a date (dd.mm.yy, dd/mm/yy, or contains digits with separators)
+                // This determines where the data columns start
+                let firstDataCol = 1;
+                for (let i = 0; i < headerParts.length; i++) {
+                    const val = headerParts[i];
+                    // Match date patterns: dd.mm.yy, dd/mm/yy, dd-mm-yy, or DAT patterns
+                    if (val && (val.match(/^\d{1,2}[.\/-]\d{1,2}[.\/-]\d{2,4}$/) || val.match(/^\d+DAT/i))) {
+                        firstDataCol = i;
+                        break;
+                    }
+                }
+                
+                // Extract dates from header starting from first data column
+                const dates = [];
+                for (let i = firstDataCol; i < headerParts.length; i++) {
+                    const val = headerParts[i];
+                    // Accept dates or DAT patterns, skip empty or letter-only headers
+                    if (val && !val.match(/^[a-z]+$/i)) {
+                        dates.push(val);
+                    }
+                }
+
+                const treatments = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const parts = lines[i].split('\t').map(cell => cell.trim());
+                    if (parts.length < 2) continue;
+
+                    // Combine all columns before firstDataCol into the treatment name
+                    let nameParts = [];
+                    for (let j = 0; j < firstDataCol; j++) {
+                        let part = (parts[j] || '').replace(/^\[\d+\]\s*/, '').trim();
+                        if (part && part !== '-') {
+                            nameParts.push(part);
+                        }
+                    }
+                    let name = nameParts.join(' - ');
+                    
+                    if (!name) continue;
+                    
+                    // Skip statistical rows
+                    if (name.match(/^(P|LSD|d\.f\.|%c\.v\.|SED|CV)$/i)) continue;
+
+                    const values = [];
+                    const letters = [];
+
+                    // Parse data columns starting from firstDataCol
+                    for (let j = firstDataCol; j < parts.length; j++) {
+                        const cell = parts[j];
+                        if (!cell) {
+                            // Empty cell - might need to add placeholder if we're tracking positions
+                            continue;
+                        }
+                        
+                        // Try to match number with optional letter group (e.g., "45.2a" or "45.2 ab" or just "45.2")
+                        const match = cell.match(/^([\d.]+)\s*([a-zA-Z]*)$/);
+                        
+                        if (match) {
+                            const num = parseFloat(match[1]);
+                            if (!isNaN(num)) {
+                                values.push(num);
+                                letters.push(match[2] || '');
+                            }
+                        } else if (cell.match(/^[a-zA-Z]+$/)) {
+                            // Standalone letter group - append to previous value's letters if exists
+                            if (letters.length > 0 && letters[letters.length - 1] === '') {
+                                letters[letters.length - 1] = cell;
+                            }
+                        }
+                    }
+
+                    if (values.length > 0) {
+                        // Ensure letters array matches values array length
+                        while (letters.length < values.length) {
+                            letters.push('');
+                        }
+                        treatments.push({ name, values, letters });
+                    }
+                }
+
+                if (treatments.length === 0) throw new Error('No valid treatment data found');
+                if (dates.length === 0) throw new Error('No dates found in header');
+                
+                // Validate that all treatments have same number of values as dates
+                const expectedLength = dates.length;
+                treatments.forEach(t => {
+                    if (t.values.length !== expectedLength) {
+                        console.warn(`Treatment "${t.name}" has ${t.values.length} values but expected ${expectedLength}`);
+                    }
+                });
+
+                tab.treatments = treatments;
+                tab.dates = dates;
+                tab.currentDateIndex = 0;
+
+                createGraph(tabId);
+                updateLegend(tabId, 0);
+                updateNavigation(tabId);
+                addTimelineLine(tabId, 0);
+
+                // Update tab name if it's still default
+                if (tab.name.startsWith('Graph ')) {
+                    tab.name = tab.graphTitle.substring(0, 20) + (tab.graphTitle.length > 20 ? '...' : '');
+                    renderTabs();
+                }
+
+                statusEl.className = 'status success';
+                statusEl.textContent = `Loaded ${treatments.length} treatments across ${dates.length} dates`;
+                
+                updateTabCount();
+                
+                autoSave();
+
+            } catch (e) {
+                statusEl.className = 'status error';
+                statusEl.textContent = 'Error: ' + e.message;
+            }
+        }
+
+        function createGraph(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            const plotEl = document.getElementById('graphPlot_' + tabId);
+            plotEl.innerHTML = '';
+
+            const tickSuffix = tab.yAxisPercent ? '%' : '';
+            const hoverSuffix = tab.yAxisPercent ? '%' : '';
+
+            const traces = tab.treatments.map((t, i) => ({
+                x: tab.dates,
+                y: t.values,
+                mode: 'lines+markers',
+                name: t.name,
+                line: { color: colors[i % colors.length], width: 3, shape: 'spline' },
+                marker: { size: 8, color: colors[i % colors.length] },
+                hovertemplate: '<b>' + t.name + '</b><br>%{x}<br>%{y:.1f}' + hoverSuffix + '<extra></extra>'
+            }));
+
+            Plotly.newPlot(plotEl, traces, {
+                title: { text: tab.graphTitle, font: { size: 28, color: 'rgba(255,255,255,0.95)', family: 'Montserrat', weight: 'bold' }, x: 0.5, xanchor: 'center', y: 0.95, yanchor: 'top' },
+                xaxis: { title: { text: tab.xAxisLabel, font: { size: 12, color: 'rgba(255,255,255,0.6)' } }, showgrid: true, gridcolor: 'rgba(255,255,255,0.05)', tickangle: -45, tickfont: { size: 10, color: 'rgba(255,255,255,0.5)' } },
+                yaxis: { title: { text: tab.yAxisLabel, font: { size: 12, color: 'rgba(255,255,255,0.6)' } }, range: [tab.yAxisMin, tab.yAxisMax], showgrid: true, gridcolor: 'rgba(255,255,255,0.05)', tickfont: { size: 10, color: 'rgba(255,255,255,0.5)' }, ticksuffix: tickSuffix },
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                showlegend: false,
+                margin: { l: 55, r: 20, t: 60, b: 80 },
+                autosize: true,
+                images: [{
+                    source: logoPath,
+                    xref: 'paper',
+                    yref: 'paper',
+                    x: 0.98,
+                    y: 0.98,
+                    sizex: 0.12,
+                    sizey: 0.12,
+                    xanchor: 'right',
+                    yanchor: 'top',
+                    opacity: 0.3,
+                    layer: 'above'
+                }]
+            }, { responsive: true, displayModeBar: false });
+
+            plotEl.on('plotly_hover', function(data) {
+                const pointIndex = data.points[0].pointNumber;
+                if (pointIndex !== tab.currentDateIndex) {
+                    tab.currentDateIndex = pointIndex;
+                    updateLegend(tabId, pointIndex);
+                    updateNavigation(tabId);
+                    addTimelineLine(tabId, pointIndex);
+                }
+            });
+        }
+
+        function addTimelineLine(tabId, dateIndex) {
+            const tab = tabs.find(t => t.id === tabId);
+            const plotEl = document.getElementById('graphPlot_' + tabId);
+            
+            const oldLine = plotEl.querySelector('.timeline-indicator');
+            if (oldLine) oldLine.remove();
+            
+            if (!tab.dates.length) return;
+            
+            const plotArea = plotEl._fullLayout;
+            if (!plotArea) return;
+            
+            const xaxis = plotArea.xaxis;
+            const yaxis = plotArea.yaxis;
+            if (!xaxis || !yaxis) return;
+            
+            const xPixel = xaxis.l2p(dateIndex) + xaxis._offset;
+            const yTop = yaxis._offset;
+            const yBottom = yaxis._offset + yaxis._length;
+            
+            const line = document.createElement('div');
+            line.className = 'timeline-indicator';
+            line.style.cssText = `position:absolute;left:${xPixel}px;top:${yTop}px;width:2px;height:${yBottom - yTop}px;background:linear-gradient(180deg,rgba(16,185,129,0.8),rgba(99,102,241,0.8));border-radius:1px;box-shadow:0 0 10px rgba(16,185,129,0.5);pointer-events:none;z-index:50;transform:translateX(-1px);`;
+            
+            const dot = document.createElement('div');
+            dot.style.cssText = 'position:absolute;left:-4px;top:-5px;width:10px;height:10px;background:#10b981;border-radius:50%;box-shadow:0 0 10px rgba(16,185,129,0.6);';
+            line.appendChild(dot);
+            
+            plotEl.style.position = 'relative';
+            plotEl.appendChild(line);
+        }
+
+        function updateLegend(tabId, dateIndex) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab || !tab.treatments.length) return;
+            
+            const sorted = tab.treatments.map((t, i) => ({
+                ...t,
+                color: colors[i % colors.length],
+                valueAtDate: t.values[dateIndex] !== undefined ? t.values[dateIndex] : 0,
+                letterAtDate: (t.letters && t.letters[dateIndex]) || ''
+            })).filter(t => t.valueAtDate !== undefined)
+              .sort((a, b) => tab.legendAscending ? a.valueAtDate - b.valueAtDate : b.valueAtDate - a.valueAtDate);
+
+            document.getElementById('legendDateDisplay_' + tabId).textContent = tab.dates[dateIndex] || '-';
+
+            const letters = [...new Set(sorted.flatMap(s => s.letterAtDate.split('')).filter(l => l))].sort();
+            const brackets = letters.map(letter => {
+                let start = -1, end = -1;
+                sorted.forEach((s, i) => {
+                    if (s.letterAtDate.includes(letter)) {
+                        if (start === -1) start = i;
+                        end = i;
+                    }
+                });
+                return { letter, start, end };
+            });
+
+            const itemHeight = 28;
+            const bracketWidth = Math.max(40, letters.length * 14 + 16);
+            let html = `<div style="display:flex;position:relative;"><svg width="${bracketWidth}" height="${sorted.length * itemHeight + 8}" style="flex-shrink:0;">`;
+
+            brackets.forEach((b, i) => {
+                const color = bracketColors[i % bracketColors.length];
+                const x = bracketWidth - 8 - (i * 12);
+                const y1 = b.start * itemHeight + 8;
+                const y2 = b.end * itemHeight + itemHeight - 4;
+                html += `<path d="M ${x+5} ${y1} L ${x+3} ${y1} Q ${x} ${y1} ${x} ${y1+3} L ${x} ${y2-3} Q ${x} ${y2} ${x+3} ${y2} L ${x+5} ${y2}" stroke="${color}" stroke-width="2" fill="none"/>`;
+                html += `<text x="${x-4}" y="${(y1+y2)/2}" text-anchor="middle" dominant-baseline="middle" fill="${color}" font-weight="700" font-size="9">${b.letter}</text>`;
+            });
+
+            html += `</svg><div style="flex:1;padding-left:4px;">`;
+            const suffix = tab.yAxisPercent ? '%' : '';
+            sorted.forEach(s => {
+                const val = (typeof s.valueAtDate === 'number') ? s.valueAtDate.toFixed(1) : '0.0';
+                html += `<div class="legend-item" style="height:${itemHeight}px"><div class="legend-color" style="background:${s.color}"></div><span class="legend-name">${s.name}</span><span class="legend-value">${val}${suffix}</span></div>`;
+            });
+            html += '</div></div>';
+
+            document.getElementById('legendContent_' + tabId).innerHTML = html;
+        }
+
+        function updateNavigation(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            document.getElementById('prevBtn_' + tabId).disabled = tab.currentDateIndex === 0;
+            document.getElementById('nextBtn_' + tabId).disabled = tab.currentDateIndex === tab.dates.length - 1;
+            document.getElementById('dateDisplay_' + tabId).textContent = tab.dates[tab.currentDateIndex] || '-';
+        }
+
+        function navigateDate(tabId, direction) {
+            const tab = tabs.find(t => t.id === tabId);
+            const newIndex = tab.currentDateIndex + direction;
+            if (newIndex >= 0 && newIndex < tab.dates.length) {
+                tab.currentDateIndex = newIndex;
+                updateLegend(tabId, newIndex);
+                updateNavigation(tabId);
+                addTimelineLine(tabId, newIndex);
+            }
+        }
+
+        function toggleSort(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            tab.legendAscending = !tab.legendAscending;
+            document.getElementById('toggleBtn_' + tabId).textContent = tab.legendAscending ? '↑ Low - Top' : '↓ High - Top';
+            updateLegend(tabId, tab.currentDateIndex);
+        }
+
+        function setupDivider(tabId) {
+            const divider = document.getElementById('divider_' + tabId);
+            const legend = document.getElementById('legendPanel_' + tabId);
+            let dragging = false;
+
+            divider.addEventListener('mousedown', () => {
+                dragging = true;
+                document.body.classList.add('no-select');
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!dragging) return;
+                const container = divider.closest('.resizable-container');
+                const rect = container.getBoundingClientRect();
+                const newWidth = Math.max(220, Math.min(400, rect.right - e.clientX - 6));
+                legend.style.width = newWidth + 'px';
+                Plotly.Plots.resize('graphPlot_' + tabId);
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (dragging) {
+                    dragging = false;
+                    document.body.classList.remove('no-select');
+                    const tab = tabs.find(t => t.id === tabId);
+                    if (tab && tab.dates.length > 0) {
+                        Plotly.Plots.resize('graphPlot_' + tabId);
+                        addTimelineLine(tabId, tab.currentDateIndex);
+                    }
+                }
+            });
+        }
+
+        let inputPanelsCollapsed = false;
+
+        function toggleInputPanel() {
+            inputPanelsCollapsed = !inputPanelsCollapsed;
+            
+            // Toggle all input panels
+            document.querySelectorAll('.input-panel').forEach(panel => {
+                if (inputPanelsCollapsed) {
+                    panel.classList.add('collapsed');
+                } else {
+                    panel.classList.remove('collapsed');
+                }
+            });
+            
+            // Resize all graphs after collapse/expand
+            setTimeout(() => {
+                tabs.forEach(tab => {
+                    if (tab.dates.length > 0) {
+                        Plotly.Plots.resize('graphPlot_' + tab.id);
+                        addTimelineLine(tab.id, tab.currentDateIndex);
+                    }
+                });
+            }, 350);
+        }
+
+        function clearInput(tabId) {
+            document.getElementById('dataInput_' + tabId).value = '';
+            document.getElementById('status_' + tabId).className = 'status';
+            document.getElementById('graphPlot_' + tabId).innerHTML = `
+                <div class="empty-graph">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M3 3v18h18M7 14l4-4 4 4 5-5"/>
+                    </svg>
+                    <p>Paste data and click Generate</p>
+                </div>
+            `;
+            document.getElementById('legendContent_' + tabId).innerHTML = '<div class="legend-empty">Generate a graph to see rankings</div>';
+            document.getElementById('legendDateDisplay_' + tabId).textContent = '-';
+            
+            const tab = tabs.find(t => t.id === tabId);
+            tab.treatments = [];
+            tab.dates = [];
+            tab.currentDateIndex = 0;
+            
+            updateNavigation(tabId);
+            updateTabCount();
+            
+            autoSave();
+        }
+
+        function resetZoom(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (tab && tab.dates.length > 0) {
+                Plotly.relayout('graphPlot_' + tabId, {
+                    'xaxis.autorange': true,
+                    'yaxis.autorange': true
+                });
+            }
+        }
+
+        async function screenshotToClipboard(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab || tab.dates.length === 0) {
+                alert('Generate a graph first');
+                return;
+            }
+
+            const btn = event.target.closest('.screenshot-btn');
+            const originalText = btn.textContent;
+            btn.textContent = '⏳ Copying...';
+            btn.classList.add('copying');
+
+            try {
+                // Wait for fonts to be ready
+                await document.fonts.ready;
+
+                // Get the resizable container (graph + legend)
+                const container = document.querySelector('#content_' + tabId + ' .resizable-container');
+                
+                // Store original styles
+                const originalWidth = container.style.width;
+                const originalHeight = container.style.height;
+                const legendPanel = container.querySelector('.legend-panel');
+                const originalLegendWidth = legendPanel.style.width;
+                const divider = container.querySelector('.divider');
+                const originalDividerDisplay = divider.style.display;
+
+                // Apply fixed dimensions for consistent output
+                container.style.width = '1200px';
+                container.style.height = '600px';
+                legendPanel.style.width = '300px';
+                legendPanel.style.minWidth = '300px';
+                divider.style.display = 'none';
+
+                // Resize Plotly chart to fit new dimensions
+                await new Promise(resolve => {
+                    Plotly.Plots.resize('graphPlot_' + tabId);
+                    setTimeout(resolve, 100);
+                });
+
+                // Re-add timeline line at correct position
+                addTimelineLine(tabId, tab.currentDateIndex);
+                
+                // Small delay to ensure rendering is complete
+                await new Promise(resolve => setTimeout(resolve, 150));
+
+                // Capture the container
+                const blob = await domtoimage.toBlob(container, {
+                    width: 1200,
+                    height: 600,
+                    style: {
+                        'transform': 'none',
+                        'transform-origin': 'top left'
+                    },
+                    bgcolor: '#0f0f1a'
+                });
+
+                // Restore original styles
+                container.style.width = originalWidth;
+                container.style.height = originalHeight;
+                legendPanel.style.width = originalLegendWidth;
+                legendPanel.style.minWidth = '';
+                divider.style.display = originalDividerDisplay;
+
+                // Resize back to normal
+                Plotly.Plots.resize('graphPlot_' + tabId);
+                addTimelineLine(tabId, tab.currentDateIndex);
+
+                // Copy to clipboard
+                await navigator.clipboard.write([
+                    new ClipboardItem({ 'image/png': blob })
+                ]);
+
+                btn.textContent = '✓ Copied!';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.classList.remove('copying');
+                }, 1500);
+
+            } catch (err) {
+                console.error('Screenshot failed:', err);
+                btn.textContent = '✗ Failed';
+                btn.classList.remove('copying');
+                
+                // Provide helpful error message
+                if (err.name === 'NotAllowedError') {
+                    alert('Clipboard access denied. Please allow clipboard permissions or use HTTPS.');
+                } else {
+                    alert('Screenshot failed: ' + err.message);
+                }
+                
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                }, 2000);
+            }
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            const tab = tabs.find(t => t.id === activeTabId);
+            if (tab && tab.dates.length > 0) {
+                Plotly.Plots.resize('graphPlot_' + activeTabId);
+                addTimelineLine(activeTabId, tab.currentDateIndex);
+            }
+        });
+    </script>
+</body>
+</html>
