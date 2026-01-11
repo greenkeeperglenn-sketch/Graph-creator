@@ -1046,14 +1046,26 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            overflow: hidden;
+            overflow: auto;
             position: relative;
+            cursor: grab;
+        }
+
+        .image-display:active {
+            cursor: grabbing;
         }
 
         .image-display img {
             max-width: 100%;
             max-height: 100%;
             object-fit: contain;
+            transition: transform 0.2s ease;
+        }
+
+        .image-display img.zoomed {
+            max-width: none;
+            max-height: none;
+            cursor: move;
         }
 
         .image-display .empty-state {
@@ -1066,6 +1078,34 @@
             height: 80px;
             margin-bottom: 16px;
             opacity: 0.3;
+        }
+
+        /* Image Controls */
+        .image-controls {
+            display: flex;
+            gap: 8px;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.5);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .image-control-btn {
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: #fff;
+            font-size: 0.85em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .image-control-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .image-control-btn:active {
+            transform: scale(0.95);
         }
 
         /* Grid Config */
@@ -1630,6 +1670,12 @@
                                         </svg>
                                         <p>Upload a drone image to get started</p>
                                     </div>
+                                </div>
+                                <div class="image-controls" id="imageControls_${tab.id}" style="display: none;">
+                                    <button class="image-control-btn" onclick="fitImageToScreen('${tab.id}')">📐 Fit to Screen</button>
+                                    <button class="image-control-btn" onclick="zoomImage('${tab.id}', 1.2)">🔍 Zoom In</button>
+                                    <button class="image-control-btn" onclick="zoomImage('${tab.id}', 0.8)">🔎 Zoom Out</button>
+                                    <button class="image-control-btn" onclick="viewActualSize('${tab.id}')">📏 100%</button>
                                 </div>
                             </div>
                         </div>
@@ -2561,7 +2607,109 @@
             const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
             const imageURL = URL.createObjectURL(imageRecord.imageData);
 
-            imageDisplay.innerHTML = `<img src="${imageURL}" alt="${imageRecord.fileName}">`;
+            imageDisplay.innerHTML = `<img src="${imageURL}" alt="${imageRecord.fileName}" data-scale="1">`;
+
+            // Show image controls
+            const imageControls = document.getElementById(`imageControls_${tabId}`);
+            if (imageControls) {
+                imageControls.style.display = 'flex';
+            }
+
+            // Setup pan/drag functionality for the image
+            const img = imageDisplay.querySelector('img');
+            setupImagePan(tabId, img);
+        }
+
+        // Fit image to screen
+        function fitImageToScreen(tabId) {
+            const img = document.querySelector(`#imageDisplay_${tabId} img`);
+            if (!img) return;
+
+            img.classList.remove('zoomed');
+            img.style.transform = 'scale(1)';
+            img.dataset.scale = '1';
+
+            // Reset scroll position
+            const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
+            if (imageDisplay) {
+                imageDisplay.scrollLeft = 0;
+                imageDisplay.scrollTop = 0;
+            }
+        }
+
+        // Zoom image by factor
+        function zoomImage(tabId, factor) {
+            const img = document.querySelector(`#imageDisplay_${tabId} img`);
+            if (!img) return;
+
+            img.classList.add('zoomed');
+            const currentScale = parseFloat(img.dataset.scale || 1);
+            const newScale = Math.max(0.1, Math.min(5, currentScale * factor)); // Limit between 0.1x and 5x
+            img.dataset.scale = newScale.toString();
+            img.style.transform = `scale(${newScale})`;
+        }
+
+        // View image at actual size (100%)
+        function viewActualSize(tabId) {
+            const img = document.querySelector(`#imageDisplay_${tabId} img`);
+            if (!img) return;
+
+            img.classList.add('zoomed');
+            img.style.transform = 'scale(1)';
+            img.dataset.scale = '1';
+        }
+
+        // Setup pan/drag functionality for zoomed images
+        function setupImagePan(tabId, img) {
+            const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
+            if (!imageDisplay) return;
+
+            let isPanning = false;
+            let startX = 0;
+            let startY = 0;
+            let scrollLeft = 0;
+            let scrollTop = 0;
+
+            imageDisplay.addEventListener('mousedown', (e) => {
+                // Only pan if image is zoomed
+                if (!img.classList.contains('zoomed')) return;
+
+                isPanning = true;
+                imageDisplay.style.cursor = 'grabbing';
+                startX = e.pageX - imageDisplay.offsetLeft;
+                startY = e.pageY - imageDisplay.offsetTop;
+                scrollLeft = imageDisplay.scrollLeft;
+                scrollTop = imageDisplay.scrollTop;
+            });
+
+            imageDisplay.addEventListener('mouseleave', () => {
+                isPanning = false;
+                if (img.classList.contains('zoomed')) {
+                    imageDisplay.style.cursor = 'move';
+                } else {
+                    imageDisplay.style.cursor = 'grab';
+                }
+            });
+
+            imageDisplay.addEventListener('mouseup', () => {
+                isPanning = false;
+                if (img.classList.contains('zoomed')) {
+                    imageDisplay.style.cursor = 'move';
+                } else {
+                    imageDisplay.style.cursor = 'grab';
+                }
+            });
+
+            imageDisplay.addEventListener('mousemove', (e) => {
+                if (!isPanning) return;
+                e.preventDefault();
+                const x = e.pageX - imageDisplay.offsetLeft;
+                const y = e.pageY - imageDisplay.offsetTop;
+                const walkX = (x - startX) * 2; // Multiply for faster scrolling
+                const walkY = (y - startY) * 2;
+                imageDisplay.scrollLeft = scrollLeft - walkX;
+                imageDisplay.scrollTop = scrollTop - walkY;
+            });
         }
 
         // Remove image
