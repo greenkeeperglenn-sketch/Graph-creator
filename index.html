@@ -1087,13 +1087,9 @@
         .image-display img {
             display: block;
             width: 100%;
-            height: auto;
-            transition: transform 0.2s ease;
-        }
-
-        .image-display img.zoomed {
-            width: auto;
-            cursor: move;
+            height: 100%;
+            object-fit: contain;
+            object-position: center;
         }
 
         .image-display .empty-state {
@@ -2743,88 +2739,49 @@
             setupImagePan(tabId, img);
         }
 
-        // Fit image to screen
+        // Re-render grid to fit the current image display
         function fitImageToScreen(tabId) {
-            const img = document.querySelector(`#imageDisplay_${tabId} img`);
-            if (!img) return;
-
-            img.classList.remove('zoomed');
-            img.style.transform = 'scale(1)';
-            img.dataset.scale = '1';
-
-            // Reset scroll position
-            const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
-            if (imageDisplay) {
-                imageDisplay.scrollLeft = 0;
-                imageDisplay.scrollTop = 0;
-            }
-
-            // Re-render grid at new scale
             const tab = tabs.find(t => t.id === tabId);
             if (tab && tab.gridState && tab.gridState.corners && tab.gridState.corners.length === 4) {
-                scaleGridToImage(tabId);
                 tab._gridCreated = true;
                 renderGrid(tabId);
             }
         }
 
-        // Zoom image by factor
+        // These zoom functions are kept for backwards compatibility but do nothing
+        // since images now use object-fit: contain and always fit the screen
         function zoomImage(tabId, factor) {
-            const img = document.querySelector(`#imageDisplay_${tabId} img`);
-            if (!img) return;
-
-            img.classList.add('zoomed');
-            const currentScale = parseFloat(img.dataset.scale || 1);
-            const newScale = Math.max(0.1, Math.min(5, currentScale * factor)); // Limit between 0.1x and 5x
-            img.dataset.scale = newScale.toString();
-            img.style.transform = `scale(${newScale})`;
-
-            // Scale grid with image if it exists
-            const tab = tabs.find(t => t.id === tabId);
-            if (tab && tab.gridState && tab.gridState.corners && tab.gridState.corners.length === 4) {
-                scaleGridWithImage(tabId, newScale);
-            }
+            // No-op: images now automatically fit the screen
         }
 
-        // View image at actual size (100%)
         function viewActualSize(tabId) {
-            const img = document.querySelector(`#imageDisplay_${tabId} img`);
-            if (!img) return;
-
-            img.classList.add('zoomed');
-            img.style.transform = 'scale(1)';
-            img.dataset.scale = '1';
-
-            // Scale grid with image if it exists
-            const tab = tabs.find(t => t.id === tabId);
-            if (tab && tab.gridState && tab.gridState.corners && tab.gridState.corners.length === 4) {
-                scaleGridWithImage(tabId, 1);
-            }
+            // No-op: images now automatically fit the screen
         }
 
-        // Scale grid with image zoom
-        function scaleGridWithImage(tabId, scale) {
-            const tab = tabs.find(t => t.id === tabId);
-            if (!tab || !tab.gridState) return;
+        // Get the actual rendered size and position of an image with object-fit: contain
+        function getRenderedImageBounds(img) {
+            const containerWidth = img.clientWidth;
+            const containerHeight = img.clientHeight;
+            const imageAspect = img.naturalWidth / img.naturalHeight;
+            const containerAspect = containerWidth / containerHeight;
 
-            const gridOverlay = document.getElementById(`gridOverlay_${tabId}`);
-            if (!gridOverlay) return;
+            let renderedWidth, renderedHeight, offsetX, offsetY;
 
-            // Store the scale in gridState so scroll sync can use it
-            tab.gridState.currentScale = scale;
-
-            // Apply scale transform with transform origin at top left
-            gridOverlay.style.transformOrigin = 'top left';
-
-            // Get current scroll position to maintain it
-            const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
-            if (imageDisplay) {
-                const scrollX = -imageDisplay.scrollLeft;
-                const scrollY = -imageDisplay.scrollTop;
-                gridOverlay.style.transform = `translate(${scrollX}px, ${scrollY}px) scale(${scale})`;
+            if (imageAspect > containerAspect) {
+                // Image is wider - fit to width
+                renderedWidth = containerWidth;
+                renderedHeight = containerWidth / imageAspect;
+                offsetX = 0;
+                offsetY = (containerHeight - renderedHeight) / 2;
             } else {
-                gridOverlay.style.transform = `scale(${scale})`;
+                // Image is taller - fit to height
+                renderedHeight = containerHeight;
+                renderedWidth = containerHeight * imageAspect;
+                offsetX = (containerWidth - renderedWidth) / 2;
+                offsetY = 0;
             }
+
+            return { width: renderedWidth, height: renderedHeight, offsetX, offsetY };
         }
 
         // Setup pan/drag functionality for zoomed images
@@ -3177,12 +3134,25 @@
             const handleClick = (e) => {
                 if (!tab._cornerPlacementMode) return;
 
-                // Get click coordinates relative to the image
-                const rect = imageDisplay.getBoundingClientRect();
-                const x = e.clientX - rect.left + imageDisplay.scrollLeft;
-                const y = e.clientY - rect.top + imageDisplay.scrollTop;
+                const img = imageDisplay.querySelector('img');
+                if (!img) return;
 
-                handleCornerPlacement(tabId, x, y);
+                // Get click coordinates relative to the container
+                const rect = imageDisplay.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const clickY = e.clientY - rect.top;
+
+                // Get the actual rendered image bounds (accounting for object-fit: contain)
+                const bounds = getRenderedImageBounds(img);
+
+                // Adjust coordinates to be relative to the actual rendered image
+                const x = clickX - bounds.offsetX;
+                const y = clickY - bounds.offsetY;
+
+                // Only register clicks within the actual image bounds
+                if (x >= 0 && x <= bounds.width && y >= 0 && y <= bounds.height) {
+                    handleCornerPlacement(tabId, x, y);
+                }
             };
 
             // Store the handler so we can remove it later
@@ -3282,16 +3252,6 @@
             }
             tab.gridState.corners = tab._placedCorners;
 
-            // Store original image dimensions for zoom scaling
-            const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
-            const img = imageDisplay?.querySelector('img');
-            if (img) {
-                tab.gridState.originalImageWidth = img.clientWidth;
-                tab.gridState.originalImageHeight = img.clientHeight;
-                tab.gridState.lastScaleX = 1;
-                tab.gridState.lastScaleY = 1;
-            }
-
             // Remove instructions and temporary markers
             removeCornerPlacementInstructions(tabId);
 
@@ -3355,16 +3315,19 @@
                 return;
             }
 
-            // Get image dimensions
-            const imgWidth = img.clientWidth;
-            const imgHeight = img.clientHeight;
+            // Get the actual rendered image size and position (accounting for object-fit: contain)
+            const bounds = getRenderedImageBounds(img);
+            const imgWidth = bounds.width;
+            const imgHeight = bounds.height;
 
-            // Get the SVG overlay and set its size to match the image
+            // Get the SVG overlay and set its size to match the rendered image
             const gridOverlay = document.getElementById(`gridOverlay_${tabId}`);
             gridOverlay.setAttribute('width', imgWidth);
             gridOverlay.setAttribute('height', imgHeight);
             gridOverlay.style.width = imgWidth + 'px';
             gridOverlay.style.height = imgHeight + 'px';
+            gridOverlay.style.left = bounds.offsetX + 'px';
+            gridOverlay.style.top = bounds.offsetY + 'px';
 
             const gridGroup = document.getElementById(`gridGroup_${tabId}`);
             gridGroup.innerHTML = '';
@@ -3552,27 +3515,8 @@
                 setupCornerDragging(tabId);
             }
 
-            // Initialize grid scale from current image zoom if not set
-            if (!tab.gridState.currentScale) {
-                const currentImageScale = parseFloat(img.dataset.scale || 1);
-                tab.gridState.currentScale = currentImageScale;
-            }
-
-            // Setup scroll synchronization
-            const syncScroll = () => {
-                const scrollX = -imageDisplay.scrollLeft;
-                const scrollY = -imageDisplay.scrollTop;
-                const scale = tab.gridState.currentScale || 1;
-                gridOverlay.style.transformOrigin = 'top left';
-                gridOverlay.style.transform = `translate(${scrollX}px, ${scrollY}px) scale(${scale})`;
-            };
-
-            if (imageDisplay._gridScrollHandler) {
-                imageDisplay.removeEventListener('scroll', imageDisplay._gridScrollHandler);
-            }
-            imageDisplay._gridScrollHandler = syncScroll;
-            imageDisplay.addEventListener('scroll', syncScroll);
-            syncScroll();
+            // Grid is now positioned absolutely to match the rendered image
+            // No scroll sync needed with object-fit: contain
 
             if (!tab._gridCreated) {
                 tab._gridCreated = true;
@@ -3602,27 +3546,41 @@
                 if (!isDragging || dragCornerIndex === null) return;
 
                 const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
+                const img = imageDisplay?.querySelector('img');
+                if (!img) return;
+
                 const rect = imageDisplay.getBoundingClientRect();
 
-                // Calculate new position relative to image
-                const x = e.clientX - rect.left + imageDisplay.scrollLeft;
-                const y = e.clientY - rect.top + imageDisplay.scrollTop;
+                // Get click coordinates relative to the container
+                const clickX = e.clientX - rect.left;
+                const clickY = e.clientY - rect.top;
+
+                // Get the actual rendered image bounds (accounting for object-fit: contain)
+                const bounds = getRenderedImageBounds(img);
+
+                // Calculate new position relative to the actual rendered image
+                const x = clickX - bounds.offsetX;
+                const y = clickY - bounds.offsetY;
+
+                // Constrain to image bounds
+                const constrainedX = Math.max(0, Math.min(bounds.width, x));
+                const constrainedY = Math.max(0, Math.min(bounds.height, y));
 
                 // Update corner position in state
-                tab.gridState.corners[dragCornerIndex] = { x, y };
+                tab.gridState.corners[dragCornerIndex] = { x: constrainedX, y: constrainedY };
 
                 // Update visual position of the handle only (don't re-render entire grid)
                 const handle = gridContainer.querySelector(`[data-corner-index="${dragCornerIndex}"]`);
                 if (handle) {
-                    handle.setAttribute('cx', x);
-                    handle.setAttribute('cy', y);
+                    handle.setAttribute('cx', constrainedX);
+                    handle.setAttribute('cy', constrainedY);
                 }
 
                 // Update label position too
                 const labels = gridContainer.querySelectorAll('text');
                 if (labels[dragCornerIndex]) {
-                    labels[dragCornerIndex].setAttribute('x', x);
-                    labels[dragCornerIndex].setAttribute('y', y - 18);
+                    labels[dragCornerIndex].setAttribute('x', constrainedX);
+                    labels[dragCornerIndex].setAttribute('y', constrainedY - 18);
                 }
 
                 // Update grid lines dynamically (without destroying handles)
