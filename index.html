@@ -1904,8 +1904,11 @@
                 statusEl.textContent = `Loaded ${treatments.length} treatments across ${dates.length} dates`;
                 
                 updateTabCount();
-                
+
                 autoSave();
+
+                // Sync treatments to field map
+                syncFieldMapTreatments(tabId);
 
             } catch (e) {
                 statusEl.className = 'status error';
@@ -2447,13 +2450,35 @@
 
         // Upload drone image
         async function uploadDroneImage(file, tabId) {
+            const dropZone = document.getElementById(`dropZone_${tabId}`);
+            const originalHTML = dropZone.innerHTML;
+
             try {
+                // Show loading state
+                dropZone.innerHTML = `
+                    <div class="drop-zone-icon">⏳</div>
+                    <div class="drop-zone-text">Uploading...</div>
+                    <div class="drop-zone-hint">${file.name}</div>
+                `;
+
                 // Extract EXIF data
                 const exifData = await extractEXIF(file);
                 const imageDate = exifData.dateTaken;
 
+                dropZone.innerHTML = `
+                    <div class="drop-zone-icon">📊</div>
+                    <div class="drop-zone-text">Processing...</div>
+                    <div class="drop-zone-hint">Generating thumbnail</div>
+                `;
+
                 // Generate thumbnail
                 const thumbnail = await generateThumbnail(file, 200);
+
+                dropZone.innerHTML = `
+                    <div class="drop-zone-icon">💾</div>
+                    <div class="drop-zone-text">Saving...</div>
+                    <div class="drop-zone-hint">Storing image</div>
+                `;
 
                 // Save to IndexedDB
                 const imageId = generateUUID();
@@ -2480,10 +2505,14 @@
                 // Refresh image library
                 await renderImageLibrary(tabId);
 
-                showNotification(`Uploaded: ${file.name}`);
+                // Restore drop zone
+                dropZone.innerHTML = originalHTML;
+
+                showNotification(`✓ Uploaded: ${file.name}`);
             } catch (err) {
                 console.error('Upload error:', err);
-                showNotification('Upload failed: ' + err.message);
+                dropZone.innerHTML = originalHTML;
+                showNotification('❌ Upload failed: ' + err.message);
             }
         }
 
@@ -2544,9 +2573,69 @@
             showNotification('Image removed');
         }
 
+        // Sync treatments from graph to field map
+        function syncFieldMapTreatments(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab || !tab.treatments || tab.treatments.length === 0) return;
+
+            // Update treatment count
+            const treatmentCountInput = document.getElementById(`treatmentCount_${tabId}`);
+            if (treatmentCountInput) {
+                treatmentCountInput.value = tab.treatments.length;
+            }
+
+            // Update treatment list in mapper
+            const treatmentList = document.getElementById(`treatmentList_${tabId}`);
+            if (!treatmentList) return;
+
+            const replicates = parseInt(document.getElementById(`replicates_${tabId}`)?.value) || 4;
+
+            treatmentList.innerHTML = tab.treatments.map((treatment, index) => {
+                const color = colors[index % colors.length];
+                return `
+                    <div class="treatment-item">
+                        <div class="treatment-header">
+                            <div class="treatment-color" style="background: ${color}"></div>
+                            <div class="treatment-name">${treatment.name}</div>
+                        </div>
+                        <div class="treatment-tile"
+                             draggable="true"
+                             data-treatment="${treatment.name}"
+                             data-color="${color}"
+                             style="background: ${color}">
+                            ${treatment.name}
+                            <span class="treatment-counter">${replicates}×</span>
+                        </div>
+                        <div class="treatment-status">
+                            Ready to assign
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Setup drag handlers
+            treatmentList.querySelectorAll('.treatment-tile').forEach(tile => {
+                tile.addEventListener('dragstart', (e) => {
+                    const treatmentName = tile.dataset.treatment;
+                    const color = tile.dataset.color;
+                    e.dataTransfer.setData('treatment', treatmentName);
+                    e.dataTransfer.setData('color', color);
+                    e.dataTransfer.effectAllowed = 'copy';
+                });
+            });
+        }
+
         // Setup field map event listeners
         function setupFieldMapListeners(tabId) {
             const dropZone = document.getElementById(`dropZone_${tabId}`);
+
+            // Update treatments when replicates change
+            const replicatesInput = document.getElementById(`replicates_${tabId}`);
+            if (replicatesInput) {
+                replicatesInput.addEventListener('change', () => {
+                    syncFieldMapTreatments(tabId);
+                });
+            }
 
             // Click to upload
             dropZone.addEventListener('click', () => {
