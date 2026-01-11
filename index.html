@@ -70,19 +70,19 @@
         }
 
         .version-indicator {
-            background: linear-gradient(135deg, #ec4899, #be185d);
+            background: linear-gradient(135deg, #f97316, #ea580c);
             color: white;
             padding: 8px 16px;
             border-radius: 20px;
             font-size: 0.85em;
             font-weight: 600;
-            box-shadow: 0 2px 8px rgba(236, 72, 153, 0.4);
+            box-shadow: 0 2px 8px rgba(249, 115, 22, 0.4);
             animation: pulse 2s infinite;
         }
 
         @keyframes pulse {
-            0%, 100% { box-shadow: 0 2px 8px rgba(236, 72, 153, 0.4); }
-            50% { box-shadow: 0 2px 16px rgba(236, 72, 153, 0.8); }
+            0%, 100% { box-shadow: 0 2px 8px rgba(249, 115, 22, 0.4); }
+            50% { box-shadow: 0 2px 16px rgba(249, 115, 22, 0.8); }
         }
 
         /* Tab Bar */
@@ -1286,7 +1286,7 @@
             <p class="subtitle">STRI's Data Visualisation Tool</p>
         </div>
         <div class="header-title" id="projectTitle">Untitled Project</div>
-        <div class="version-indicator">v2.3 - LIVE</div>
+        <div class="version-indicator">v2.4 - DEBUG</div>
     </div>
 
     <div class="tab-bar">
@@ -2777,22 +2777,30 @@
 
             console.log('Found treatments:', tab.treatments);
 
+            // Show notification
+            showNotification(`✓ Synced ${tab.treatments.length} treatments to Field Map`);
+
             // Update treatment count
             const treatmentCountInput = document.getElementById(`treatmentCount_${tabId}`);
             console.log('treatmentCountInput:', treatmentCountInput);
             if (treatmentCountInput) {
                 treatmentCountInput.value = tab.treatments.length;
+                console.log('Set treatment count to:', tab.treatments.length);
+            } else {
+                console.error('Could not find treatmentCount input element');
             }
 
             // Update treatment list in mapper
             const treatmentList = document.getElementById(`treatmentList_${tabId}`);
             console.log('treatmentList element:', treatmentList);
             if (!treatmentList) {
-                console.log('Treatment list element not found');
+                console.error('Treatment list element not found - cannot sync treatments');
+                showNotification('❌ Error: Could not find treatment list element');
                 return;
             }
 
             const replicates = parseInt(document.getElementById(`replicates_${tabId}`)?.value) || 4;
+            console.log('Replicates:', replicates);
 
             treatmentList.innerHTML = tab.treatments.map((treatment, index) => {
                 const color = colors[index % colors.length];
@@ -2827,6 +2835,8 @@
                     e.dataTransfer.effectAllowed = 'copy';
                 });
             });
+
+            console.log('✓ Treatment sync completed successfully');
         }
 
         // Setup field map event listeners
