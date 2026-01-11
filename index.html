@@ -1286,7 +1286,7 @@
             <p class="subtitle">STRI's Data Visualisation Tool</p>
         </div>
         <div class="header-title" id="projectTitle">Untitled Project</div>
-        <div class="version-indicator">v4.1 - BUTTONS</div>
+        <div class="version-indicator">v4.2 - SMOOTH</div>
     </div>
 
     <div class="tab-bar">
@@ -3151,8 +3151,10 @@
 
             // Create grid container
             const gridContainer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-            gridContainer.setAttribute('transform', `translate(${gridState.x}, ${gridState.y}) rotate(${gridState.rotation} ${gridState.width/2} ${gridState.height/2})`);
             gridContainer.setAttribute('id', `gridContainer_${tabId}`);
+            // Use CSS transform for better performance
+            gridContainer.style.transform = `translate(${gridState.x}px, ${gridState.y}px) rotate(${gridState.rotation}deg)`;
+            gridContainer.style.transformOrigin = `${gridState.width/2}px ${gridState.height/2}px`;
 
             // Draw grid lines
             const cellW = gridState.width / cols;
@@ -3234,6 +3236,23 @@
             // Setup drag/resize/rotate interactions
             setupGridInteractions(tabId);
 
+            // Setup scroll synchronization - make grid follow image scroll
+            const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
+            const syncScroll = () => {
+                const scrollX = imageDisplay.scrollLeft;
+                const scrollY = imageDisplay.scrollTop;
+                gridOverlay.style.transform = `translate(${scrollX}px, ${scrollY}px)`;
+            };
+
+            // Remove old listener if exists
+            imageDisplay.removeEventListener('scroll', imageDisplay._gridScrollHandler);
+            // Store handler so we can remove it later
+            imageDisplay._gridScrollHandler = syncScroll;
+            imageDisplay.addEventListener('scroll', syncScroll);
+
+            // Initial sync
+            syncScroll();
+
             showNotification(`✓ Grid created: ${cols} columns × ${rows} rows`);
         }
 
@@ -3282,9 +3301,12 @@
 
             gridOverlay.addEventListener('mousemove', (e) => {
                 if (isDragging) {
+                    // Update position directly for smooth dragging
                     tab.gridState.x = e.clientX - startX;
                     tab.gridState.y = e.clientY - startY;
-                    gridContainer.setAttribute('transform', `translate(${tab.gridState.x}, ${tab.gridState.y}) rotate(${tab.gridState.rotation} ${tab.gridState.width/2} ${tab.gridState.height/2})`);
+                    // Use transform for instant visual feedback
+                    gridContainer.style.transform = `translate(${tab.gridState.x}px, ${tab.gridState.y}px) rotate(${tab.gridState.rotation}deg)`;
+                    gridContainer.style.transformOrigin = `${tab.gridState.width/2}px ${tab.gridState.height/2}px`;
                 } else if (isResizing && resizeHandle) {
                     const dx = e.clientX - startX;
                     const dy = e.clientY - startY;
@@ -3329,7 +3351,9 @@
                     const centerY = tab.gridState.y + tab.gridState.height / 2;
                     const angle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
                     tab.gridState.rotation = angle - 90; // Adjust to match handle position
-                    gridContainer.setAttribute('transform', `translate(${tab.gridState.x}, ${tab.gridState.y}) rotate(${tab.gridState.rotation} ${tab.gridState.width/2} ${tab.gridState.height/2})`);
+                    // Use style.transform for instant feedback
+                    gridContainer.style.transform = `translate(${tab.gridState.x}px, ${tab.gridState.y}px) rotate(${tab.gridState.rotation}deg)`;
+                    gridContainer.style.transformOrigin = `${tab.gridState.width/2}px ${tab.gridState.height/2}px`;
                 }
             });
 
