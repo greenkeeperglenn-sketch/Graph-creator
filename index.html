@@ -1074,20 +1074,18 @@
 
         .image-display {
             flex: 1;
-            overflow: auto;
+            overflow: visible;
             position: relative;
-            cursor: grab;
             min-height: 0;
-        }
-
-        .image-display:active {
-            cursor: grabbing;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .image-display img {
             display: block;
-            width: 100%;
-            height: 100%;
+            max-width: 90%;
+            max-height: 90%;
             object-fit: contain;
             object-position: center;
         }
@@ -1102,39 +1100,6 @@
             height: 80px;
             margin-bottom: 16px;
             opacity: 0.3;
-        }
-
-        /* Image Controls */
-        .image-controls {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            display: flex;
-            gap: 8px;
-            padding: 12px;
-            background: rgba(0, 0, 0, 0.8);
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            z-index: 10;
-        }
-
-        .image-control-btn {
-            padding: 6px 12px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 6px;
-            color: #fff;
-            font-size: 0.85em;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .image-control-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        .image-control-btn:active {
-            transform: scale(0.95);
         }
 
         /* Grid Config */
@@ -1708,13 +1673,6 @@
                                         <!-- Grid will be rendered here -->
                                     </g>
                                 </svg>
-
-                                <div class="image-controls" id="imageControls_${tab.id}" style="display: none;">
-                                    <button class="image-control-btn" onclick="fitImageToScreen('${tab.id}')">📐 Fit to Screen</button>
-                                    <button class="image-control-btn" onclick="zoomImage('${tab.id}', 1.2)">🔍 Zoom In</button>
-                                    <button class="image-control-btn" onclick="zoomImage('${tab.id}', 0.8)">🔎 Zoom Out</button>
-                                    <button class="image-control-btn" onclick="viewActualSize('${tab.id}')">📏 100%</button>
-                                </div>
                             </div>
                         </div>
 
@@ -2726,115 +2684,35 @@
             const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
             const imageURL = URL.createObjectURL(imageRecord.imageData);
 
-            imageDisplay.innerHTML = `<img src="${imageURL}" alt="${imageRecord.fileName}" data-scale="1">`;
+            imageDisplay.innerHTML = `<img src="${imageURL}" alt="${imageRecord.fileName}">`;
 
-            // Show image controls
-            const imageControls = document.getElementById(`imageControls_${tabId}`);
-            if (imageControls) {
-                imageControls.style.display = 'flex';
-            }
-
-            // Setup pan/drag functionality for the image
+            // Setup interaction handlers for the image
             const img = imageDisplay.querySelector('img');
-            setupImagePan(tabId, img);
-        }
-
-        // Re-render grid to fit the current image display
-        function fitImageToScreen(tabId) {
-            const tab = tabs.find(t => t.id === tabId);
-            if (tab && tab.gridState && tab.gridState.corners && tab.gridState.corners.length === 4) {
-                tab._gridCreated = true;
-                renderGrid(tabId);
+            if (img) {
+                img.style.cursor = 'crosshair'; // For grid corner placement
             }
         }
 
-        // These zoom functions are kept for backwards compatibility but do nothing
-        // since images now use object-fit: contain and always fit the screen
-        function zoomImage(tabId, factor) {
-            // No-op: images now automatically fit the screen
-        }
-
-        function viewActualSize(tabId) {
-            // No-op: images now automatically fit the screen
-        }
-
-        // Get the actual rendered size and position of an image with object-fit: contain
+        // Get the actual rendered size and position of the image
         function getRenderedImageBounds(img) {
-            const containerWidth = img.clientWidth;
-            const containerHeight = img.clientHeight;
-            const imageAspect = img.naturalWidth / img.naturalHeight;
-            const containerAspect = containerWidth / containerHeight;
-
-            let renderedWidth, renderedHeight, offsetX, offsetY;
-
-            if (imageAspect > containerAspect) {
-                // Image is wider - fit to width
-                renderedWidth = containerWidth;
-                renderedHeight = containerWidth / imageAspect;
-                offsetX = 0;
-                offsetY = (containerHeight - renderedHeight) / 2;
-            } else {
-                // Image is taller - fit to height
-                renderedHeight = containerHeight;
-                renderedWidth = containerHeight * imageAspect;
-                offsetX = (containerWidth - renderedWidth) / 2;
-                offsetY = 0;
+            const imageDisplay = img.closest('.image-display');
+            if (!imageDisplay) {
+                return { width: img.clientWidth, height: img.clientHeight, offsetX: 0, offsetY: 0 };
             }
 
-            return { width: renderedWidth, height: renderedHeight, offsetX, offsetY };
-        }
+            const containerRect = imageDisplay.getBoundingClientRect();
+            const imgRect = img.getBoundingClientRect();
 
-        // Setup pan/drag functionality for zoomed images
-        function setupImagePan(tabId, img) {
-            const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
-            if (!imageDisplay) return;
+            // Calculate offset relative to container
+            const offsetX = imgRect.left - containerRect.left;
+            const offsetY = imgRect.top - containerRect.top;
 
-            let isPanning = false;
-            let startX = 0;
-            let startY = 0;
-            let scrollLeft = 0;
-            let scrollTop = 0;
-
-            imageDisplay.addEventListener('mousedown', (e) => {
-                // Only pan if image is zoomed
-                if (!img.classList.contains('zoomed')) return;
-
-                isPanning = true;
-                imageDisplay.style.cursor = 'grabbing';
-                startX = e.pageX - imageDisplay.offsetLeft;
-                startY = e.pageY - imageDisplay.offsetTop;
-                scrollLeft = imageDisplay.scrollLeft;
-                scrollTop = imageDisplay.scrollTop;
-            });
-
-            imageDisplay.addEventListener('mouseleave', () => {
-                isPanning = false;
-                if (img.classList.contains('zoomed')) {
-                    imageDisplay.style.cursor = 'move';
-                } else {
-                    imageDisplay.style.cursor = 'grab';
-                }
-            });
-
-            imageDisplay.addEventListener('mouseup', () => {
-                isPanning = false;
-                if (img.classList.contains('zoomed')) {
-                    imageDisplay.style.cursor = 'move';
-                } else {
-                    imageDisplay.style.cursor = 'grab';
-                }
-            });
-
-            imageDisplay.addEventListener('mousemove', (e) => {
-                if (!isPanning) return;
-                e.preventDefault();
-                const x = e.pageX - imageDisplay.offsetLeft;
-                const y = e.pageY - imageDisplay.offsetTop;
-                const walkX = (x - startX) * 2; // Multiply for faster scrolling
-                const walkY = (y - startY) * 2;
-                imageDisplay.scrollLeft = scrollLeft - walkX;
-                imageDisplay.scrollTop = scrollTop - walkY;
-            });
+            return {
+                width: img.clientWidth,
+                height: img.clientHeight,
+                offsetX: offsetX,
+                offsetY: offsetY
+            };
         }
 
         // Remove image
@@ -3743,6 +3621,12 @@
             if (tab && tab.dates.length > 0) {
                 Plotly.Plots.resize('graphPlot_' + activeTabId);
                 addTimelineLine(activeTabId, tab.currentDateIndex);
+            }
+
+            // Re-render grid on resize to keep it locked to the image
+            if (tab && tab.gridState && tab.gridState.corners && tab.gridState.corners.length === 4) {
+                tab._gridCreated = true;
+                renderGrid(activeTabId);
             }
         });
     </script>
