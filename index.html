@@ -1582,10 +1582,92 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- View Switcher -->
+                <div class="view-switcher">
+                    <label>
+                        <input type="radio" name="view_${tab.id}" value="graph" checked onchange="switchView('${tab.id}', 'graph')">
+                        <span>📊 Graph</span>
+                    </label>
+                    <label>
+                        <input type="radio" name="view_${tab.id}" value="fieldmap" onchange="switchView('${tab.id}', 'fieldmap')">
+                        <span>🗺️ Field Map</span>
+                    </label>
+                </div>
+
+                <!-- Field Map View -->
+                <div class="field-map-view" id="fieldMapView_${tab.id}">
+                    <div class="field-map-content">
+                        <!-- Left Panel: Image Library -->
+                        <div class="field-map-panel field-map-left">
+                            <h3>📁 Image Library</h3>
+
+                            <!-- Drop Zone -->
+                            <div class="drop-zone" id="dropZone_${tab.id}">
+                                <div class="drop-zone-icon">📷</div>
+                                <div class="drop-zone-text">Drop Images or ZIP</div>
+                                <div class="drop-zone-hint">JPG, PNG, or project archive</div>
+                            </div>
+
+                            <!-- Image List -->
+                            <div class="image-library">
+                                <div class="image-list" id="imageList_${tab.id}">
+                                    <div style="text-align: center; color: rgba(255,255,255,0.3); padding: 20px; font-size: 0.9em;">
+                                        No images uploaded
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Center Panel: Image Display -->
+                        <div class="field-map-panel field-map-center">
+                            <h3>🖼️ Drone Image</h3>
+                            <div class="image-display-container">
+                                <div class="image-display" id="imageDisplay_${tab.id}">
+                                    <div class="empty-state">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                            <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                        </svg>
+                                        <p>Upload a drone image to get started</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Panel: Grid Config & Treatment Mapper -->
+                        <div class="field-map-panel field-map-right">
+                            <h3>⚙️ Grid Configuration</h3>
+
+                            <div class="grid-config-section">
+                                <div class="grid-config-row">
+                                    <div class="grid-config-group">
+                                        <label>Replicates</label>
+                                        <input type="number" id="replicates_${tab.id}" value="4" min="1" max="10">
+                                    </div>
+                                    <div class="grid-config-group">
+                                        <label>Treatments</label>
+                                        <input type="number" id="treatmentCount_${tab.id}" value="0" disabled>
+                                    </div>
+                                </div>
+                                <div style="font-size: 0.85em; color: rgba(255,255,255,0.5); margin-top: 8px;">
+                                    Generate a graph first to see treatments
+                                </div>
+                            </div>
+
+                            <h3 style="margin-top: 24px;">🎯 Treatment Mapper</h3>
+                            <div class="treatment-list" id="treatmentList_${tab.id}">
+                                <div style="text-align: center; color: rgba(255,255,255,0.3); padding: 20px; font-size: 0.9em;">
+                                    Generate graph to see treatments
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             `;
             container.appendChild(content);
             setupDivider(tab.id);
             setupInputListeners(tab.id);
+            setupFieldMapListeners(tab.id);
         }
 
         function setupInputListeners(tabId) {
@@ -2188,6 +2270,320 @@
                     btn.textContent = originalText;
                 }, 2000);
             }
+        }
+
+        // =====================================
+        // FIELD MAP FUNCTIONALITY
+        // =====================================
+
+        // Switch between Graph and Field Map views
+        function switchView(tabId, view) {
+            const graphArea = document.querySelector(`#content_${tabId} .main-content`);
+            const fieldMapView = document.getElementById(`fieldMapView_${tabId}`);
+
+            if (view === 'graph') {
+                graphArea.style.display = 'flex';
+                fieldMapView.classList.remove('active');
+            } else {
+                graphArea.style.display = 'none';
+                fieldMapView.classList.add('active');
+            }
+        }
+
+        // IndexedDB Manager for drone images
+        class ImageDatabase {
+            constructor() {
+                this.dbName = 'stri_graph_generator_images';
+                this.version = 1;
+                this.db = null;
+            }
+
+            async open() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(this.dbName, this.version);
+
+                    request.onerror = () => reject(request.error);
+                    request.onsuccess = () => {
+                        this.db = request.result;
+                        resolve(this.db);
+                    };
+
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains('droneImages')) {
+                            const store = db.createObjectStore('droneImages', { keyPath: 'id' });
+                            store.createIndex('tabId', 'tabId', { unique: false });
+                            store.createIndex('date', 'date', { unique: false });
+                        }
+                    };
+                });
+            }
+
+            async save(imageRecord) {
+                const db = await this.open();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction('droneImages', 'readwrite');
+                    const store = tx.objectStore('droneImages');
+                    const request = store.put(imageRecord);
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async get(imageId) {
+                const db = await this.open();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction('droneImages', 'readonly');
+                    const store = tx.objectStore('droneImages');
+                    const request = store.get(imageId);
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async getAllByTab(tabId) {
+                const db = await this.open();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction('droneImages', 'readonly');
+                    const store = tx.objectStore('droneImages');
+                    const index = store.index('tabId');
+                    const request = index.getAll(tabId);
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async delete(imageId) {
+                const db = await this.open();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction('droneImages', 'readwrite');
+                    const store = tx.objectStore('droneImages');
+                    const request = store.delete(imageId);
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+            }
+        }
+
+        const imageDB = new ImageDatabase();
+
+        // Generate UUID for images
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        // Extract EXIF metadata from image
+        function extractEXIF(file) {
+            return new Promise((resolve) => {
+                EXIF.getData(file, function() {
+                    const dateStr = EXIF.getTag(this, 'DateTimeOriginal') || EXIF.getTag(this, 'DateTime');
+                    const imageDate = dateStr ? parseEXIFDate(dateStr) : new Date(file.lastModified);
+
+                    resolve({
+                        dateTaken: imageDate,
+                        model: EXIF.getTag(this, 'Model') || 'Unknown',
+                        width: EXIF.getTag(this, 'PixelXDimension') || EXIF.getTag(this, 'ExifImageWidth'),
+                        height: EXIF.getTag(this, 'PixelYDimension') || EXIF.getTag(this, 'ExifImageLength'),
+                        gps: {
+                            lat: EXIF.getTag(this, 'GPSLatitude'),
+                            lon: EXIF.getTag(this, 'GPSLongitude'),
+                            alt: EXIF.getTag(this, 'GPSAltitude')
+                        }
+                    });
+                });
+            });
+        }
+
+        // Parse EXIF date string
+        function parseEXIFDate(dateStr) {
+            if (!dateStr) return new Date();
+            // EXIF format: "2025:01:08 13:45:30"
+            const parts = dateStr.split(' ');
+            const datePart = parts[0].replace(/:/g, '-');
+            const timePart = parts[1] || '00:00:00';
+            return new Date(`${datePart}T${timePart}`);
+        }
+
+        // Format date for display
+        function formatDate(date) {
+            if (typeof date === 'string') date = new Date(date);
+            const options = { year: 'numeric', month: 'short', day: 'numeric' };
+            return date.toLocaleDateString('en-US', options);
+        }
+
+        // Generate thumbnail
+        async function generateThumbnail(file, maxWidth) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        const scale = maxWidth / img.width;
+                        canvas.width = maxWidth;
+                        canvas.height = img.height * scale;
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.7));
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Show notification
+        function showNotification(message) {
+            const notif = document.createElement('div');
+            notif.className = 'notification';
+            notif.textContent = message;
+            document.body.appendChild(notif);
+            setTimeout(() => notif.remove(), 3000);
+        }
+
+        // Upload drone image
+        async function uploadDroneImage(file, tabId) {
+            try {
+                // Extract EXIF data
+                const exifData = await extractEXIF(file);
+                const imageDate = exifData.dateTaken;
+
+                // Generate thumbnail
+                const thumbnail = await generateThumbnail(file, 200);
+
+                // Save to IndexedDB
+                const imageId = generateUUID();
+                await imageDB.save({
+                    id: imageId,
+                    tabId: tabId,
+                    date: imageDate.toISOString().split('T')[0],
+                    fileName: file.name,
+                    mimeType: file.type,
+                    imageData: file,
+                    thumbnail: thumbnail,
+                    uploadedAt: new Date().toISOString(),
+                    exifData: {
+                        dateTaken: imageDate.toISOString(),
+                        camera: exifData.model,
+                        gps: exifData.gps,
+                        dimensions: {
+                            width: exifData.width,
+                            height: exifData.height
+                        }
+                    }
+                });
+
+                // Refresh image library
+                await renderImageLibrary(tabId);
+
+                showNotification(`Uploaded: ${file.name}`);
+            } catch (err) {
+                console.error('Upload error:', err);
+                showNotification('Upload failed: ' + err.message);
+            }
+        }
+
+        // Render image library
+        async function renderImageLibrary(tabId) {
+            const imageList = document.getElementById(`imageList_${tabId}`);
+            const images = await imageDB.getAllByTab(tabId);
+
+            if (images.length === 0) {
+                imageList.innerHTML = '<div style="text-align: center; color: rgba(255,255,255,0.3); padding: 20px; font-size: 0.9em;">No images uploaded</div>';
+                return;
+            }
+
+            // Sort by date
+            images.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            imageList.innerHTML = images.map((img, index) => `
+                <div class="image-item ${index === 0 ? 'active' : ''}" onclick="selectImage('${tabId}', '${img.id}')">
+                    <img src="${img.thumbnail}" class="image-thumbnail" alt="${img.fileName}">
+                    <div class="image-info">
+                        <div class="image-date">${formatDate(img.date)}</div>
+                        <div class="image-filename">${img.fileName}</div>
+                    </div>
+                    <div class="image-remove" onclick="event.stopPropagation(); removeImage('${tabId}', '${img.id}')">×</div>
+                </div>
+            `).join('');
+
+            // Auto-select first image
+            if (images.length > 0) {
+                await selectImage(tabId, images[0].id);
+            }
+        }
+
+        // Select and display image
+        async function selectImage(tabId, imageId) {
+            // Update active state
+            document.querySelectorAll(`#imageList_${tabId} .image-item`).forEach(item => {
+                item.classList.remove('active');
+            });
+            event?.target.closest('.image-item')?.classList.add('active');
+
+            // Load and display image
+            const imageRecord = await imageDB.get(imageId);
+            if (!imageRecord) return;
+
+            const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
+            const imageURL = URL.createObjectURL(imageRecord.imageData);
+
+            imageDisplay.innerHTML = `<img src="${imageURL}" alt="${imageRecord.fileName}">`;
+        }
+
+        // Remove image
+        async function removeImage(tabId, imageId) {
+            if (!confirm('Remove this image?')) return;
+
+            await imageDB.delete(imageId);
+            await renderImageLibrary(tabId);
+            showNotification('Image removed');
+        }
+
+        // Setup field map event listeners
+        function setupFieldMapListeners(tabId) {
+            const dropZone = document.getElementById(`dropZone_${tabId}`);
+
+            // Click to upload
+            dropZone.addEventListener('click', () => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/*';
+                input.multiple = true;
+                input.onchange = async (e) => {
+                    const files = Array.from(e.target.files);
+                    for (const file of files) {
+                        await uploadDroneImage(file, tabId);
+                    }
+                };
+                input.click();
+            });
+
+            // Drag and drop
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('drag-over');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('drag-over');
+            });
+
+            dropZone.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('drag-over');
+
+                const files = Array.from(e.dataTransfer.files);
+                for (const file of files) {
+                    if (file.type.startsWith('image/')) {
+                        await uploadDroneImage(file, tabId);
+                    }
+                }
+            });
         }
 
         // Handle window resize
