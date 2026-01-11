@@ -1495,6 +1495,12 @@
                                 lockGridBtn.textContent = '🔓 Unlock Grid';
                                 lockGridBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
                             }
+
+                            // Show breakdown button if locked and has assignments
+                            const viewBreakdownBtn = document.getElementById(`viewBreakdown_${tab.id}`);
+                            if (viewBreakdownBtn && tab.gridState.locked && tab.gridState.cellTreatments && Object.keys(tab.gridState.cellTreatments).length > 0) {
+                                viewBreakdownBtn.style.display = 'block';
+                            }
                         }
                     }, 100);
                 }
@@ -1771,6 +1777,9 @@
                                             🔒 Lock Grid
                                         </button>
                                     </div>
+                                    <button class="image-control-btn" id="viewBreakdown_${tab.id}" onclick="viewBreakdown('${tab.id}')" style="display: none; width: 100%; margin-top: 8px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); font-weight: 600; padding: 10px;">
+                                        👁️ View Breakdown
+                                    </button>
                                 </div>
 
                                 <div id="gridInfo_${tab.id}" style="margin-top: 16px; padding: 12px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; display: none;">
@@ -2838,6 +2847,117 @@
             console.log('✓ Treatment sync completed successfully');
         }
 
+        // View breakdown - show treatments grouped with their plots
+        function viewBreakdown(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab || !tab.gridState || !tab.gridState.cellTreatments) {
+                showNotification('⚠️ No treatment assignments to display');
+                return;
+            }
+
+            const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
+            const img = imageDisplay?.querySelector('img');
+            if (!img) {
+                showNotification('⚠️ No image loaded');
+                return;
+            }
+
+            // Group cells by treatment
+            const treatmentGroups = {};
+            Object.entries(tab.gridState.cellTreatments).forEach(([cellKey, cellData]) => {
+                if (!treatmentGroups[cellData.name]) {
+                    treatmentGroups[cellData.name] = {
+                        color: cellData.color,
+                        cells: []
+                    };
+                }
+                const [row, col] = cellKey.split('_').map(Number);
+                treatmentGroups[cellData.name].cells.push({ row, col, cellKey });
+            });
+
+            // Create modal overlay
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.95);
+                z-index: 10000;
+                overflow-y: auto;
+                padding: 20px;
+            `;
+
+            // Create content container
+            const content = document.createElement('div');
+            content.style.cssText = `
+                max-width: 1400px;
+                margin: 0 auto;
+                color: white;
+            `;
+
+            // Add header
+            const header = document.createElement('div');
+            header.style.cssText = `
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 24px;
+            `;
+            header.innerHTML = `
+                <h2 style="margin: 0; font-size: 1.5em;">📊 Treatment Breakdown</h2>
+                <button onclick="this.closest('[style*=\\'position: fixed\\']').remove()" style="
+                    background: rgba(239, 68, 68, 0.9);
+                    border: none;
+                    color: white;
+                    padding: 8px 16px;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 1em;
+                    font-weight: 600;
+                ">✖ Close</button>
+            `;
+            content.appendChild(header);
+
+            // Add treatment groups
+            const groupsContainer = document.createElement('div');
+            groupsContainer.style.cssText = `
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 20px;
+            `;
+
+            Object.entries(treatmentGroups).forEach(([treatmentName, data]) => {
+                const treatmentCard = document.createElement('div');
+                treatmentCard.style.cssText = `
+                    background: rgba(255, 255, 255, 0.05);
+                    border: 2px solid ${data.color};
+                    border-radius: 12px;
+                    padding: 16px;
+                `;
+
+                treatmentCard.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                        <div style="width: 20px; height: 20px; background: ${data.color}; border-radius: 4px;"></div>
+                        <h3 style="margin: 0; font-size: 1.2em;">${treatmentName}</h3>
+                        <span style="margin-left: auto; color: rgba(255,255,255,0.6);">${data.cells.length} plots</span>
+                    </div>
+                    <div style="color: rgba(255,255,255,0.7); font-size: 0.9em; margin-bottom: 8px;">
+                        Cells: ${data.cells.map(c => `(${c.row + 1},${c.col + 1})`).join(', ')}
+                    </div>
+                `;
+
+                groupsContainer.appendChild(treatmentCard);
+            });
+
+            content.appendChild(groupsContainer);
+            modal.appendChild(content);
+            document.body.appendChild(modal);
+
+            showNotification('📊 Breakdown view opened');
+        }
+
         // Update treatment counters to show remaining assignments
         function updateTreatmentCounters(tabId) {
             const tab = tabs.find(t => t.id === tabId);
@@ -3033,6 +3153,7 @@
             }
 
             const lockGridBtn = document.getElementById(`lockGrid_${tabId}`);
+            const viewBreakdownBtn = document.getElementById(`viewBreakdown_${tabId}`);
 
             if (tab.gridState.locked) {
                 // Unlock grid
@@ -3040,6 +3161,9 @@
                 lockGridBtn.textContent = '🔒 Lock Grid';
                 lockGridBtn.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
                 showNotification('🔓 Grid unlocked - you can adjust corners');
+
+                // Hide breakdown button when unlocked
+                if (viewBreakdownBtn) viewBreakdownBtn.style.display = 'none';
 
                 // Re-render to show corner handles
                 renderGrid(tabId);
@@ -3049,6 +3173,11 @@
                 lockGridBtn.textContent = '🔓 Unlock Grid';
                 lockGridBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
                 showNotification('🔒 Grid locked - drag treatments onto cells to assign');
+
+                // Show breakdown button when locked (if treatments are assigned)
+                if (viewBreakdownBtn && tab.gridState.cellTreatments && Object.keys(tab.gridState.cellTreatments).length > 0) {
+                    viewBreakdownBtn.style.display = 'block';
+                }
 
                 // Re-render to hide corner handles
                 renderGrid(tabId);
@@ -3429,6 +3558,12 @@
 
                             // Update treatment counter
                             updateTreatmentCounters(tabId);
+
+                            // Show breakdown button if grid is locked and has assignments
+                            const viewBreakdownBtn = document.getElementById(`viewBreakdown_${tabId}`);
+                            if (viewBreakdownBtn && tab.gridState.locked) {
+                                viewBreakdownBtn.style.display = 'block';
+                            }
 
                             // Auto-save after assignment
                             autoSave();
