@@ -1316,7 +1316,7 @@
         // Auto-save to localStorage whenever tabs change
         function autoSave() {
             const project = {
-                version: 1,
+                version: 2,
                 savedAt: new Date().toISOString(),
                 projectName: projectName,
                 tabCounter: tabCounter,
@@ -1332,7 +1332,14 @@
                     yAxisPercent: tab.yAxisPercent,
                     treatments: tab.treatments,
                     dates: tab.dates,
-                    rawData: document.getElementById('dataInput_' + tab.id)?.value || ''
+                    rawData: document.getElementById('dataInput_' + tab.id)?.value || '',
+                    gridState: tab.gridState ? {
+                        corners: tab.gridState.corners,
+                        cols: tab.gridState.cols,
+                        rows: tab.gridState.rows,
+                        locked: tab.gridState.locked,
+                        cellTreatments: tab.gridState.cellTreatments
+                    } : null
                 }))
             };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
@@ -1341,7 +1348,7 @@
         // Save project to JSON file
         function saveProject() {
             const project = {
-                version: 1,
+                version: 2,
                 savedAt: new Date().toISOString(),
                 projectName: projectName,
                 tabCounter: tabCounter,
@@ -1356,7 +1363,14 @@
                     yAxisPercent: tab.yAxisPercent,
                     treatments: tab.treatments,
                     dates: tab.dates,
-                    rawData: document.getElementById('dataInput_' + tab.id)?.value || ''
+                    rawData: document.getElementById('dataInput_' + tab.id)?.value || '',
+                    gridState: tab.gridState ? {
+                        corners: tab.gridState.corners,
+                        cols: tab.gridState.cols,
+                        rows: tab.gridState.rows,
+                        locked: tab.gridState.locked,
+                        cellTreatments: tab.gridState.cellTreatments
+                    } : null
                 }))
             };
             
@@ -1432,9 +1446,11 @@
                     treatments: savedTab.treatments || [],
                     dates: savedTab.dates || [],
                     currentDateIndex: 0,
-                    legendAscending: true
+                    legendAscending: true,
+                    gridState: savedTab.gridState || null,
+                    _gridCreated: savedTab.gridState ? true : false
                 };
-                
+
                 tabs.push(tab);
                 createTabContent(tab);
                 
@@ -1462,6 +1478,25 @@
                     updateLegend(tab.id, 0);
                     updateNavigation(tab.id);
                     addTimelineLine(tab.id, 0);
+                }
+
+                // Restore grid if it exists
+                if (tab.gridState && tab.gridState.corners && tab.gridState.corners.length === 4) {
+                    // Wait for DOM to be ready, then render the grid
+                    setTimeout(() => {
+                        const gridOverlay = document.getElementById(`gridOverlay_${tab.id}`);
+                        if (gridOverlay) {
+                            gridOverlay.style.display = 'block';
+                            renderGrid(tab.id);
+
+                            // Update lock button state
+                            const lockGridBtn = document.getElementById(`lockGrid_${tab.id}`);
+                            if (lockGridBtn && tab.gridState.locked) {
+                                lockGridBtn.textContent = '🔓 Unlock Grid';
+                                lockGridBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                            }
+                        }
+                    }, 100);
                 }
             });
             
@@ -2803,6 +2838,65 @@
             console.log('✓ Treatment sync completed successfully');
         }
 
+        // Update treatment counters to show remaining assignments
+        function updateTreatmentCounters(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab || !tab.treatments || !tab.gridState) return;
+
+            const replicates = parseInt(document.getElementById(`replicates_${tabId}`)?.value) || 4;
+
+            // Count how many times each treatment has been assigned
+            const assignmentCounts = {};
+            tab.treatments.forEach(treatment => {
+                assignmentCounts[treatment.name] = 0;
+            });
+
+            // Count assignments in cellTreatments
+            if (tab.gridState.cellTreatments) {
+                Object.values(tab.gridState.cellTreatments).forEach(cell => {
+                    if (assignmentCounts.hasOwnProperty(cell.name)) {
+                        assignmentCounts[cell.name]++;
+                    }
+                });
+            }
+
+            // Update each treatment counter display
+            const treatmentList = document.getElementById(`treatmentList_${tabId}`);
+            if (!treatmentList) return;
+
+            tab.treatments.forEach((treatment, index) => {
+                const assigned = assignmentCounts[treatment.name] || 0;
+                const remaining = replicates - assigned;
+
+                // Find the treatment item
+                const treatmentItems = treatmentList.querySelectorAll('.treatment-item');
+                if (treatmentItems[index]) {
+                    const counter = treatmentItems[index].querySelector('.treatment-counter');
+                    const status = treatmentItems[index].querySelector('.treatment-status');
+
+                    if (counter) {
+                        if (remaining > 0) {
+                            counter.textContent = `${remaining} left`;
+                            counter.style.background = 'rgba(239, 68, 68, 0.9)'; // Red background
+                        } else {
+                            counter.textContent = '✓ Complete';
+                            counter.style.background = 'rgba(16, 185, 129, 0.9)'; // Green background
+                        }
+                    }
+
+                    if (status) {
+                        if (remaining > 0) {
+                            status.textContent = `${assigned}/${replicates} assigned`;
+                            status.style.color = '#fbbf24'; // Yellow
+                        } else {
+                            status.textContent = '✓ All assigned';
+                            status.style.color = '#10b981'; // Green
+                        }
+                    }
+                }
+            });
+        }
+
         // Populate the source graph dropdown with available graphs that have treatments
         function populateSourceGraphDropdown(tabId) {
             const dropdown = document.getElementById(`sourceGraph_${tabId}`);
@@ -3332,6 +3426,12 @@
                             cell.setAttribute('fill', color);
                             cell.setAttribute('fill-opacity', '0.3');
                             showNotification(`✓ ${treatmentName} assigned to cell (${row + 1}, ${col + 1})`);
+
+                            // Update treatment counter
+                            updateTreatmentCounters(tabId);
+
+                            // Auto-save after assignment
+                            autoSave();
                         }
                     });
 
@@ -3395,6 +3495,9 @@
 
             // Grid is now positioned absolutely to match the rendered image
             // No scroll sync needed with object-fit: contain
+
+            // Update treatment counters to reflect current assignments
+            updateTreatmentCounters(tabId);
 
             if (!tab._gridCreated) {
                 tab._gridCreated = true;
