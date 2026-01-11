@@ -1286,7 +1286,7 @@
             <p class="subtitle">STRI's Data Visualisation Tool</p>
         </div>
         <div class="header-title" id="projectTitle">Untitled Project</div>
-        <div class="version-indicator">v3.0 - GRID</div>
+        <div class="version-indicator">v3.1 - LOCK</div>
     </div>
 
     <div class="tab-bar">
@@ -1695,7 +1695,17 @@
 
                         <!-- Center Panel: Image Display -->
                         <div class="field-map-panel field-map-center">
-                            <h3>🖼️ Drone Image</h3>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                <h3 style="margin: 0;">🖼️ Drone Image</h3>
+                                <div style="display: flex; gap: 8px;">
+                                    <button class="image-control-btn" id="gridToggle_${tab.id}" onclick="toggleGrid('${tab.id}')" style="background: linear-gradient(135deg, #10b981, #059669); font-weight: 600; padding: 8px 16px;">
+                                        ⊞ Show Grid
+                                    </button>
+                                    <button class="image-control-btn" id="lockGrid_${tab.id}" onclick="lockGrid('${tab.id}')" style="display: none; background: linear-gradient(135deg, #f59e0b, #d97706); font-weight: 600; padding: 8px 16px;">
+                                        🔒 Lock Grid
+                                    </button>
+                                </div>
+                            </div>
                             <div class="image-display-container">
                                 <div class="image-display" id="imageDisplay_${tab.id}">
                                     <div class="empty-state">
@@ -1721,9 +1731,6 @@
                                         <button class="image-control-btn" onclick="zoomImage('${tab.id}', 1.2)">🔍 Zoom In</button>
                                         <button class="image-control-btn" onclick="zoomImage('${tab.id}', 0.8)">🔎 Zoom Out</button>
                                         <button class="image-control-btn" onclick="viewActualSize('${tab.id}')">📏 100%</button>
-                                        <button class="image-control-btn" id="gridToggle_${tab.id}" onclick="toggleGrid('${tab.id}')" style="background: linear-gradient(135deg, #10b981, #059669); font-weight: 600;">
-                                            ⊞ Show Grid
-                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -2957,6 +2964,7 @@
         function toggleGrid(tabId) {
             const gridOverlay = document.getElementById(`gridOverlay_${tabId}`);
             const gridToggleBtn = document.getElementById(`gridToggle_${tabId}`);
+            const lockGridBtn = document.getElementById(`lockGrid_${tabId}`);
             const gridInfo = document.getElementById(`gridInfo_${tabId}`);
             const gridControls = document.getElementById(`gridControls_${tabId}`);
             const tab = tabs.find(t => t.id === tabId);
@@ -2973,6 +2981,7 @@
                 gridOverlay.style.display = 'none';
                 gridToggleBtn.textContent = '⊞ Show Grid';
                 gridToggleBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                lockGridBtn.style.display = 'none';
                 gridInfo.style.display = 'none';
                 gridControls.style.display = 'none';
             } else {
@@ -2981,8 +2990,44 @@
                 gridOverlay.style.display = 'block';
                 gridToggleBtn.textContent = '⊟ Hide Grid';
                 gridToggleBtn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+                lockGridBtn.style.display = 'block';
                 gridInfo.style.display = 'block';
                 gridControls.style.display = 'block';
+            }
+        }
+
+        // Lock grid in place and prepare for treatment assignment
+        function lockGrid(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab || !tab.gridState) {
+                showNotification('⚠️ No grid to lock');
+                return;
+            }
+
+            const lockGridBtn = document.getElementById(`lockGrid_${tabId}`);
+            const gridContainer = document.getElementById(`gridContainer_${tabId}`);
+
+            if (tab.gridState.locked) {
+                // Unlock grid
+                tab.gridState.locked = false;
+                lockGridBtn.textContent = '🔒 Lock Grid';
+                lockGridBtn.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+                if (gridContainer) {
+                    gridContainer.style.cursor = 'move';
+                    gridContainer.style.pointerEvents = 'all';
+                }
+                showNotification('🔓 Grid unlocked - you can adjust position');
+            } else {
+                // Lock grid
+                tab.gridState.locked = true;
+                lockGridBtn.textContent = '🔓 Unlock Grid';
+                lockGridBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                if (gridContainer) {
+                    gridContainer.style.cursor = 'default';
+                    gridContainer.style.pointerEvents = 'none';
+                }
+                showNotification('🔒 Grid locked - ready for treatment assignment');
+                autoSave();
             }
         }
 
@@ -3150,6 +3195,9 @@
 
             // Make grid draggable
             gridContainer.addEventListener('mousedown', (e) => {
+                // Don't allow interactions if grid is locked
+                if (tab.gridState.locked) return;
+
                 if (e.target.classList.contains('grid-resize-handle')) {
                     isResizing = true;
                     resizeHandle = e.target.getAttribute('data-handle-type');
