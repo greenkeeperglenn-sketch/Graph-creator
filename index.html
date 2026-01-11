@@ -3018,22 +3018,35 @@
             const isVisible = gridOverlay.style.display !== 'none';
 
             if (isVisible) {
-                // Hide grid
+                // Hide grid and cancel corner placement mode if active
                 gridOverlay.style.display = 'none';
                 gridToggleBtn.textContent = '⊞ Show Grid';
                 gridToggleBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
                 lockGridBtn.style.display = 'none';
                 gridInfo.style.display = 'none';
                 gridControls.style.display = 'none';
+
+                // Cancel corner placement mode if active
+                if (tab._cornerPlacementMode) {
+                    tab._cornerPlacementMode = false;
+                    tab._placedCorners = [];
+                    removeCornerPlacementInstructions(tabId);
+                }
             } else {
-                // Show grid
-                renderGrid(tabId);
-                gridOverlay.style.display = 'block';
-                gridToggleBtn.textContent = '⊟ Hide Grid';
-                gridToggleBtn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
-                lockGridBtn.style.display = 'block';
-                gridInfo.style.display = 'block';
-                gridControls.style.display = 'block';
+                // Check if grid already exists
+                if (tab.gridState && tab.gridState.corners && tab.gridState.corners.length === 4) {
+                    // Grid already placed, just show it
+                    renderGrid(tabId);
+                    gridOverlay.style.display = 'block';
+                    gridToggleBtn.textContent = '⊟ Hide Grid';
+                    gridToggleBtn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+                    lockGridBtn.style.display = 'block';
+                    gridInfo.style.display = 'block';
+                    gridControls.style.display = 'block';
+                } else {
+                    // Enter corner placement mode
+                    enterCornerPlacementMode(tabId);
+                }
             }
         }
 
@@ -3072,14 +3085,192 @@
             }
         }
 
-        // Render the grid based on treatments and replicates
-        function renderGrid(tabId) {
-            console.log('=== renderGrid called ===');
-            console.log('tabId:', tabId);
+        // Enter corner placement mode - click 4 corners to define grid
+        function enterCornerPlacementMode(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab) return;
 
+            const gridOverlay = document.getElementById(`gridOverlay_${tabId}`);
+            const gridToggleBtn = document.getElementById(`gridToggle_${tabId}`);
+            const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
+
+            // Initialize corner placement mode
+            tab._cornerPlacementMode = true;
+            tab._placedCorners = [];
+
+            // Show grid overlay and instructions
+            gridOverlay.style.display = 'block';
+            gridToggleBtn.textContent = '✖ Cancel';
+            gridToggleBtn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+
+            // Add instruction overlay on the image
+            const instructionDiv = document.createElement('div');
+            instructionDiv.id = `cornerInstructions_${tabId}`;
+            instructionDiv.style.cssText = `
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(0, 0, 0, 0.85);
+                color: white;
+                padding: 24px;
+                border-radius: 12px;
+                font-size: 16px;
+                font-weight: 600;
+                text-align: center;
+                z-index: 1000;
+                pointer-events: none;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            `;
+            instructionDiv.innerHTML = `
+                📍 Click to place 4 corners<br>
+                <span style="font-size: 14px; opacity: 0.8; font-weight: normal;">
+                    1️⃣ Top-Left → 2️⃣ Top-Right → 3️⃣ Bottom-Right → 4️⃣ Bottom-Left
+                </span>
+            `;
+            imageDisplay.appendChild(instructionDiv);
+
+            // Set up click listener on the image display
+            const handleClick = (e) => {
+                if (!tab._cornerPlacementMode) return;
+
+                // Get click coordinates relative to the image
+                const rect = imageDisplay.getBoundingClientRect();
+                const x = e.clientX - rect.left + imageDisplay.scrollLeft;
+                const y = e.clientY - rect.top + imageDisplay.scrollTop;
+
+                handleCornerPlacement(tabId, x, y);
+            };
+
+            // Store the handler so we can remove it later
+            imageDisplay._cornerClickHandler = handleClick;
+            imageDisplay.addEventListener('click', handleClick);
+
+            showNotification('📍 Click 4 corners: TL → TR → BR → BL');
+        }
+
+        // Remove corner placement instructions and listeners
+        function removeCornerPlacementInstructions(tabId) {
+            const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
+            const instructionDiv = document.getElementById(`cornerInstructions_${tabId}`);
+
+            if (instructionDiv) {
+                instructionDiv.remove();
+            }
+
+            if (imageDisplay && imageDisplay._cornerClickHandler) {
+                imageDisplay.removeEventListener('click', imageDisplay._cornerClickHandler);
+                delete imageDisplay._cornerClickHandler;
+            }
+
+            // Remove any temporary corner markers
+            const gridOverlay = document.getElementById(`gridOverlay_${tabId}`);
+            if (gridOverlay) {
+                const tempMarkers = gridOverlay.querySelectorAll('.temp-corner-marker');
+                tempMarkers.forEach(marker => marker.remove());
+            }
+        }
+
+        // Handle corner placement clicks
+        function handleCornerPlacement(tabId, x, y) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab || !tab._cornerPlacementMode) return;
+
+            // Add corner to placed corners
+            tab._placedCorners.push({ x, y });
+
+            // Draw a temporary marker at this corner
+            const gridOverlay = document.getElementById(`gridOverlay_${tabId}`);
+            const marker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            marker.setAttribute('cx', x);
+            marker.setAttribute('cy', y);
+            marker.setAttribute('r', 8);
+            marker.setAttribute('fill', '#10b981');
+            marker.setAttribute('stroke', 'white');
+            marker.setAttribute('stroke-width', 2);
+            marker.classList.add('temp-corner-marker');
+            gridOverlay.appendChild(marker);
+
+            // Add number label
+            const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            label.setAttribute('x', x);
+            label.setAttribute('y', y - 15);
+            label.setAttribute('text-anchor', 'middle');
+            label.setAttribute('fill', 'white');
+            label.setAttribute('font-size', '14');
+            label.setAttribute('font-weight', 'bold');
+            label.textContent = tab._placedCorners.length;
+            label.classList.add('temp-corner-marker');
+            gridOverlay.appendChild(label);
+
+            // Update instruction
+            const instructionDiv = document.getElementById(`cornerInstructions_${tabId}`);
+            if (instructionDiv) {
+                const cornerNames = ['Top-Left', 'Top-Right', 'Bottom-Right', 'Bottom-Left'];
+                const nextCorner = cornerNames[tab._placedCorners.length];
+
+                if (nextCorner) {
+                    instructionDiv.innerHTML = `
+                        📍 Click ${nextCorner} (${tab._placedCorners.length + 1}/4)<br>
+                        <span style="font-size: 14px; opacity: 0.8; font-weight: normal;">
+                            ${tab._placedCorners.length} corner${tab._placedCorners.length > 1 ? 's' : ''} placed
+                        </span>
+                    `;
+                }
+            }
+
+            // If all 4 corners placed, create the grid
+            if (tab._placedCorners.length === 4) {
+                finishCornerPlacement(tabId);
+            }
+        }
+
+        // Finish corner placement and create grid
+        function finishCornerPlacement(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab) return;
+
+            // Exit corner placement mode
+            tab._cornerPlacementMode = false;
+
+            // Store corners in gridState
+            if (!tab.gridState) {
+                tab.gridState = {};
+            }
+            tab.gridState.corners = tab._placedCorners;
+
+            // Remove instructions and temporary markers
+            removeCornerPlacementInstructions(tabId);
+
+            // Update button states
+            const gridToggleBtn = document.getElementById(`gridToggle_${tabId}`);
+            const lockGridBtn = document.getElementById(`lockGrid_${tabId}`);
+            const gridInfo = document.getElementById(`gridInfo_${tabId}`);
+            const gridControls = document.getElementById(`gridControls_${tabId}`);
+
+            gridToggleBtn.textContent = '⊟ Hide Grid';
+            gridToggleBtn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+            lockGridBtn.style.display = 'block';
+            gridInfo.style.display = 'block';
+            gridControls.style.display = 'block';
+
+            // Render the grid
+            renderGrid(tabId);
+
+            showNotification('✓ Grid created! Drag corners to adjust, then lock when ready');
+        }
+
+        // Render the grid based on 4 clicked corners
+        function renderGrid(tabId) {
             const tab = tabs.find(t => t.id === tabId);
             if (!tab || !tab.treatments) {
                 console.error('Tab or treatments not found');
+                return;
+            }
+
+            // Must have 4 corners placed
+            if (!tab.gridState || !tab.gridState.corners || tab.gridState.corners.length !== 4) {
+                showNotification('⚠️ Please place 4 corners first');
                 return;
             }
 
@@ -3091,58 +3282,36 @@
             const treatments = tab.treatments.length;
 
             // Use manual overrides if provided, otherwise auto-calculate
-            const cols = manualCols || treatments; // Columns = manual or treatments
-            const rows = manualRows || replicates; // Rows = manual or replicates
-
-            console.log('Grid dimensions:', { cols, rows, totalCells: cols * rows, manual: { cols: manualCols, rows: manualRows } });
+            const cols = manualCols || treatments;
+            const rows = manualRows || replicates;
 
             // Update grid info display
             document.getElementById(`gridCols_${tabId}`).textContent = cols + (manualCols ? ' (manual)' : '');
             document.getElementById(`gridRows_${tabId}`).textContent = rows + (manualRows ? ' (manual)' : '');
             document.getElementById(`gridCells_${tabId}`).textContent = cols * rows;
 
-            const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
-            console.log('imageDisplay element:', imageDisplay);
+            // Update cols/rows in grid state
+            tab.gridState.cols = cols;
+            tab.gridState.rows = rows;
 
+            const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
             const img = imageDisplay?.querySelector('img');
-            console.log('img element:', img);
-            console.log('img dimensions:', img ? { width: img.clientWidth, height: img.clientHeight } : 'no image');
 
             if (!img) {
                 showNotification('⚠️ Please upload an image first');
-                console.error('No image found in imageDisplay');
                 return;
             }
-
-            console.log('Image found, continuing with grid rendering...');
 
             // Get image dimensions
             const imgWidth = img.clientWidth;
             const imgHeight = img.clientHeight;
 
-            // Get the SVG overlay and set its size to match the image exactly
+            // Get the SVG overlay and set its size to match the image
             const gridOverlay = document.getElementById(`gridOverlay_${tabId}`);
             gridOverlay.setAttribute('width', imgWidth);
             gridOverlay.setAttribute('height', imgHeight);
             gridOverlay.style.width = imgWidth + 'px';
             gridOverlay.style.height = imgHeight + 'px';
-
-            // Initialize grid state if not exists
-            if (!tab.gridState) {
-                tab.gridState = {
-                    x: 0,
-                    y: 0,
-                    width: imgWidth,
-                    height: imgHeight,
-                    rotation: 0,
-                    cols: cols,
-                    rows: rows
-                };
-            } else {
-                // Update cols/rows in existing state
-                tab.gridState.cols = cols;
-                tab.gridState.rows = rows;
-            }
 
             const gridGroup = document.getElementById(`gridGroup_${tabId}`);
             gridGroup.innerHTML = '';
@@ -3150,116 +3319,112 @@
             const opacity = parseFloat(document.getElementById(`gridOpacity_${tabId}`)?.value) || 0.7;
             const lineWidth = parseFloat(document.getElementById(`gridLineWidth_${tabId}`)?.value) || 2;
 
-            const gridState = tab.gridState;
+            // Get the 4 corners: [TL, TR, BR, BL]
+            const corners = tab.gridState.corners;
+            const [tl, tr, br, bl] = corners;
+
+            // Helper function: bilinear interpolation to get point at (u, v) where u,v are in [0,1]
+            // u=0 is left, u=1 is right
+            // v=0 is top, v=1 is bottom
+            const interpolate = (u, v) => {
+                const top_x = tl.x + u * (tr.x - tl.x);
+                const top_y = tl.y + u * (tr.y - tl.y);
+                const bottom_x = bl.x + u * (br.x - bl.x);
+                const bottom_y = bl.y + u * (br.y - bl.y);
+
+                return {
+                    x: top_x + v * (bottom_x - top_x),
+                    y: top_y + v * (bottom_y - top_y)
+                };
+            };
 
             // Create grid container
             const gridContainer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             gridContainer.setAttribute('id', `gridContainer_${tabId}`);
-            // Use CSS transform for better performance
-            gridContainer.style.transform = `translate(${gridState.x}px, ${gridState.y}px) rotate(${gridState.rotation}deg)`;
-            gridContainer.style.transformOrigin = `${gridState.width/2}px ${gridState.height/2}px`;
 
-            // Draw grid lines
-            const cellW = gridState.width / cols;
-            const cellH = gridState.height / rows;
-
-            // Vertical lines
+            // Draw vertical lines
             for (let i = 0; i <= cols; i++) {
+                const u = i / cols;
+                const p1 = interpolate(u, 0); // top
+                const p2 = interpolate(u, 1); // bottom
+
                 const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                line.setAttribute('x1', i * cellW);
-                line.setAttribute('y1', 0);
-                line.setAttribute('x2', i * cellW);
-                line.setAttribute('y2', gridState.height);
+                line.setAttribute('x1', p1.x);
+                line.setAttribute('y1', p1.y);
+                line.setAttribute('x2', p2.x);
+                line.setAttribute('y2', p2.y);
                 line.setAttribute('stroke', `rgba(16, 185, 129, ${opacity})`);
                 line.setAttribute('stroke-width', lineWidth);
+                line.style.pointerEvents = 'none';
                 gridContainer.appendChild(line);
             }
 
-            // Horizontal lines
+            // Draw horizontal lines
             for (let i = 0; i <= rows; i++) {
+                const v = i / rows;
+                const p1 = interpolate(0, v); // left
+                const p2 = interpolate(1, v); // right
+
                 const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                line.setAttribute('x1', 0);
-                line.setAttribute('y1', i * cellH);
-                line.setAttribute('x2', gridState.width);
-                line.setAttribute('y2', i * cellH);
+                line.setAttribute('x1', p1.x);
+                line.setAttribute('y1', p1.y);
+                line.setAttribute('x2', p2.x);
+                line.setAttribute('y2', p2.y);
                 line.setAttribute('stroke', `rgba(16, 185, 129, ${opacity})`);
                 line.setAttribute('stroke-width', lineWidth);
+                line.style.pointerEvents = 'none';
                 gridContainer.appendChild(line);
             }
 
-            // Add resize handles (corners) - moved inward for visibility
-            const handleSize = 15;
-            const inset = 20; // Move handles inward by 20px
-            const handles = [
-                { x: inset, y: inset, cursor: 'nwse-resize', type: 'tl' },
-                { x: gridState.width - inset, y: inset, cursor: 'nesw-resize', type: 'tr' },
-                { x: inset, y: gridState.height - inset, cursor: 'nesw-resize', type: 'bl' },
-                { x: gridState.width - inset, y: gridState.height - inset, cursor: 'nwse-resize', type: 'br' }
-            ];
-
-            handles.forEach(h => {
+            // Add draggable corner handles
+            const handleSize = 12;
+            corners.forEach((corner, index) => {
                 const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                handle.setAttribute('cx', h.x);
-                handle.setAttribute('cy', h.y);
+                handle.setAttribute('cx', corner.x);
+                handle.setAttribute('cy', corner.y);
                 handle.setAttribute('r', handleSize);
                 handle.setAttribute('fill', '#10b981');
                 handle.setAttribute('stroke', '#fff');
-                handle.setAttribute('stroke-width', 2);
-                handle.setAttribute('cursor', h.cursor);
-                handle.setAttribute('data-handle-type', h.type);
-                handle.classList.add('grid-resize-handle');
+                handle.setAttribute('stroke-width', 3);
+                handle.setAttribute('cursor', 'move');
+                handle.setAttribute('data-corner-index', index);
+                handle.classList.add('grid-corner-handle');
                 gridContainer.appendChild(handle);
+
+                // Add label
+                const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                label.setAttribute('x', corner.x);
+                label.setAttribute('y', corner.y - 18);
+                label.setAttribute('text-anchor', 'middle');
+                label.setAttribute('fill', 'white');
+                label.setAttribute('font-size', '12');
+                label.setAttribute('font-weight', 'bold');
+                label.setAttribute('pointer-events', 'none');
+                const cornerNames = ['TL', 'TR', 'BR', 'BL'];
+                label.textContent = cornerNames[index];
+                gridContainer.appendChild(label);
             });
-
-            // Add rotation handle (center top)
-            const rotHandle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            rotHandle.setAttribute('cx', gridState.width / 2);
-            rotHandle.setAttribute('cy', -30);
-            rotHandle.setAttribute('r', handleSize);
-            rotHandle.setAttribute('fill', '#8b5cf6');
-            rotHandle.setAttribute('stroke', '#fff');
-            rotHandle.setAttribute('stroke-width', 2);
-            rotHandle.setAttribute('cursor', 'grab');
-            rotHandle.classList.add('grid-rotation-handle');
-            gridContainer.appendChild(rotHandle);
-
-            // Add rotation handle connector line
-            const rotLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-            rotLine.setAttribute('x1', gridState.width / 2);
-            rotLine.setAttribute('y1', 0);
-            rotLine.setAttribute('x2', gridState.width / 2);
-            rotLine.setAttribute('y2', -30);
-            rotLine.setAttribute('stroke', '#8b5cf6');
-            rotLine.setAttribute('stroke-width', 2);
-            rotLine.setAttribute('stroke-dasharray', '4');
-            gridContainer.appendChild(rotLine);
 
             gridGroup.appendChild(gridContainer);
 
-            // Setup drag/resize/rotate interactions
-            setupGridInteractions(tabId);
+            // Setup corner dragging interactions
+            setupCornerDragging(tabId);
 
-            // Setup scroll synchronization - make grid follow image scroll
+            // Setup scroll synchronization
             const syncScroll = () => {
                 const scrollX = -imageDisplay.scrollLeft;
                 const scrollY = -imageDisplay.scrollTop;
                 gridOverlay.style.transform = `translate(${scrollX}px, ${scrollY}px)`;
             };
 
-            // Remove old listener if exists
             if (imageDisplay._gridScrollHandler) {
                 imageDisplay.removeEventListener('scroll', imageDisplay._gridScrollHandler);
             }
-            // Store handler so we can remove it later
             imageDisplay._gridScrollHandler = syncScroll;
             imageDisplay.addEventListener('scroll', syncScroll);
-
-            // Initial sync
             syncScroll();
 
-            // Only show notification if this is the first time creating the grid
             if (!tab._gridCreated) {
-                showNotification(`✓ Grid created: ${cols} columns × ${rows} rows`);
                 tab._gridCreated = true;
             }
         }
@@ -3271,158 +3436,73 @@
             renderGrid(tabId);
         }
 
-        // Setup grid interactions (drag, resize, rotate)
-        function setupGridInteractions(tabId) {
+        // Setup corner dragging
+        function setupCornerDragging(tabId) {
             const tab = tabs.find(t => t.id === tabId);
             if (!tab || !tab.gridState) return;
 
-            const gridContainer = document.getElementById(`gridContainer_${tabId}`);
             const gridOverlay = document.getElementById(`gridOverlay_${tabId}`);
+            const gridContainer = document.getElementById(`gridContainer_${tabId}`);
 
             let isDragging = false;
-            let isResizing = false;
-            let isRotating = false;
+            let dragCornerIndex = null;
             let startX = 0;
             let startY = 0;
-            let resizeHandle = null;
 
-            // Make grid draggable
             gridContainer.addEventListener('mousedown', (e) => {
-                // Don't allow interactions if grid is locked
                 if (tab.gridState.locked) return;
 
-                if (e.target.classList.contains('grid-resize-handle')) {
-                    isResizing = true;
-                    resizeHandle = e.target.getAttribute('data-handle-type');
-                    startX = e.clientX;
-                    startY = e.clientY;
-                } else if (e.target.classList.contains('grid-rotation-handle')) {
-                    isRotating = true;
-                    e.target.style.cursor = 'grabbing';
-                    startX = e.clientX;
-                    startY = e.clientY;
-                } else {
+                if (e.target.classList.contains('grid-corner-handle')) {
                     isDragging = true;
-                    startX = e.clientX - tab.gridState.x;
-                    startY = e.clientY - tab.gridState.y;
-                    gridContainer.style.cursor = 'grabbing';
+                    dragCornerIndex = parseInt(e.target.getAttribute('data-corner-index'));
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    e.target.style.cursor = 'grabbing';
+                    e.stopPropagation();
                 }
             });
 
             gridOverlay.addEventListener('mousemove', (e) => {
-                if (isDragging) {
-                    // Update position directly for smooth dragging
-                    tab.gridState.x = e.clientX - startX;
-                    tab.gridState.y = e.clientY - startY;
-                    // Use transform for instant visual feedback
-                    gridContainer.style.transform = `translate(${tab.gridState.x}px, ${tab.gridState.y}px) rotate(${tab.gridState.rotation}deg)`;
-                    gridContainer.style.transformOrigin = `${tab.gridState.width/2}px ${tab.gridState.height/2}px`;
-                } else if (isResizing && resizeHandle) {
-                    const dx = e.clientX - startX;
-                    const dy = e.clientY - startY;
+                if (!isDragging || dragCornerIndex === null) return;
 
-                    // Store original dimensions if not already stored
-                    if (!tab._resizeStart) {
-                        tab._resizeStart = {
-                            width: tab.gridState.width,
-                            height: tab.gridState.height,
-                            x: tab.gridState.x,
-                            y: tab.gridState.y
-                        };
-                    }
+                const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
+                const rect = imageDisplay.getBoundingClientRect();
 
-                    const orig = tab._resizeStart;
+                // Calculate new position relative to image
+                const x = e.clientX - rect.left + imageDisplay.scrollLeft;
+                const y = e.clientY - rect.top + imageDisplay.scrollTop;
 
-                    // Calculate new dimensions based on handle
-                    let newWidth = orig.width;
-                    let newHeight = orig.height;
-                    let newX = orig.x;
-                    let newY = orig.y;
+                // Update corner position
+                tab.gridState.corners[dragCornerIndex] = { x, y };
 
-                    if (resizeHandle === 'br') {
-                        newWidth = Math.max(100, orig.width + dx);
-                        newHeight = Math.max(100, orig.height + dy);
-                    } else if (resizeHandle === 'bl') {
-                        newWidth = Math.max(100, orig.width - dx);
-                        newX = orig.x + (orig.width - newWidth);
-                        newHeight = Math.max(100, orig.height + dy);
-                    } else if (resizeHandle === 'tr') {
-                        newWidth = Math.max(100, orig.width + dx);
-                        newHeight = Math.max(100, orig.height - dy);
-                        newY = orig.y + (orig.height - newHeight);
-                    } else if (resizeHandle === 'tl') {
-                        newWidth = Math.max(100, orig.width - dx);
-                        newHeight = Math.max(100, orig.height - dy);
-                        newX = orig.x + (orig.width - newWidth);
-                        newY = orig.y + (orig.height - newHeight);
-                    }
-
-                    // Update state
-                    tab.gridState.width = newWidth;
-                    tab.gridState.height = newHeight;
-                    tab.gridState.x = newX;
-                    tab.gridState.y = newY;
-
-                    // Apply transform for instant visual feedback
-                    const scaleX = newWidth / orig.width;
-                    const scaleY = newHeight / orig.height;
-                    gridContainer.style.transform = `translate(${newX}px, ${newY}px) scale(${scaleX}, ${scaleY}) rotate(${tab.gridState.rotation}deg)`;
-                    gridContainer.style.transformOrigin = `0 0`;
-                } else if (isRotating) {
-                    const centerX = tab.gridState.x + tab.gridState.width / 2;
-                    const centerY = tab.gridState.y + tab.gridState.height / 2;
-                    const angle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
-                    tab.gridState.rotation = angle - 90; // Adjust to match handle position
-                    // Use style.transform for instant feedback
-                    gridContainer.style.transform = `translate(${tab.gridState.x}px, ${tab.gridState.y}px) rotate(${tab.gridState.rotation}deg)`;
-                    gridContainer.style.transformOrigin = `${tab.gridState.width/2}px ${tab.gridState.height/2}px`;
+                // Update visual position of the handle
+                const handle = gridContainer.querySelector(`[data-corner-index="${dragCornerIndex}"]`);
+                if (handle) {
+                    handle.setAttribute('cx', x);
+                    handle.setAttribute('cy', y);
                 }
+
+                // Redraw grid lines to match new corner positions
+                renderGrid(tabId);
             });
 
             gridOverlay.addEventListener('mouseup', () => {
-                const wasResizing = isResizing;
-                isDragging = false;
-                isResizing = false;
-                isRotating = false;
-                resizeHandle = null;
-
-                // Clear resize start cache
-                if (tab._resizeStart) {
-                    delete tab._resizeStart;
-                }
-
-                // Re-render grid after resize to update all elements properly
-                if (wasResizing) {
-                    tab._gridCreated = true; // Don't show notification
-                    renderGrid(tabId);
-                } else {
-                    gridContainer.style.cursor = 'move';
-                    const rotHandle = gridContainer.querySelector('.grid-rotation-handle');
-                    if (rotHandle) rotHandle.style.cursor = 'grab';
+                if (isDragging) {
+                    isDragging = false;
+                    dragCornerIndex = null;
+                    const handles = gridContainer.querySelectorAll('.grid-corner-handle');
+                    handles.forEach(h => h.style.cursor = 'move');
                 }
             });
 
             gridOverlay.addEventListener('mouseleave', () => {
-                const wasResizing = isResizing;
-                isDragging = false;
-                isResizing = false;
-                isRotating = false;
-                resizeHandle = null;
-
-                // Clear resize start cache
-                if (tab._resizeStart) {
-                    delete tab._resizeStart;
-                }
-
-                // Re-render if we were resizing when mouse left
-                if (wasResizing) {
-                    tab._gridCreated = true; // Don't show notification
-                    renderGrid(tabId);
+                if (isDragging) {
+                    isDragging = false;
+                    dragCornerIndex = null;
+                    const handles = gridContainer.querySelectorAll('.grid-corner-handle');
+                    handles.forEach(h => h.style.cursor = 'move');
                 }
             });
-
-            // Set initial cursor
-            gridContainer.style.cursor = 'move';
         }
 
         // Setup field map event listeners
