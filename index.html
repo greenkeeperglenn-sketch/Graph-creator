@@ -70,19 +70,19 @@
         }
 
         .version-indicator {
-            background: linear-gradient(135deg, #ef4444, #dc2626);
+            background: linear-gradient(135deg, #06b6d4, #0891b2);
             color: white;
             padding: 8px 16px;
             border-radius: 20px;
             font-size: 0.85em;
             font-weight: 600;
-            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+            box-shadow: 0 2px 8px rgba(6, 182, 212, 0.4);
             animation: pulse 2s infinite;
         }
 
         @keyframes pulse {
-            0%, 100% { box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4); }
-            50% { box-shadow: 0 2px 16px rgba(239, 68, 68, 0.8); }
+            0%, 100% { box-shadow: 0 2px 8px rgba(6, 182, 212, 0.4); }
+            50% { box-shadow: 0 2px 16px rgba(6, 182, 212, 0.8); }
         }
 
         /* Tab Bar */
@@ -1286,7 +1286,7 @@
             <p class="subtitle">STRI's Data Visualisation Tool</p>
         </div>
         <div class="header-title" id="projectTitle">Untitled Project</div>
-        <div class="version-indicator">v4.3 - FIXED</div>
+        <div class="version-indicator">v4.4 - SCROLL</div>
     </div>
 
     <div class="tab-bar">
@@ -1794,7 +1794,10 @@
                                 </div>
 
                                 <div id="gridControls_${tab.id}" style="margin-top: 16px; display: none;">
-                                    <h4 style="color: rgba(16, 185, 129, 0.8); font-size: 0.95em; margin-bottom: 12px;">⚙️ Grid Appearance</h4>
+                                    <h4 style="color: rgba(16, 185, 129, 0.8); font-size: 0.95em; margin-bottom: 8px;">⚙️ Grid Appearance</h4>
+                                    <div style="font-size: 0.75em; color: rgba(255,255,255,0.5); margin-bottom: 12px;">
+                                        💡 Use the purple rotation handle (top center) to straighten skewed drone images
+                                    </div>
                                     <div class="grid-config-row" style="margin-bottom: 12px;">
                                         <div class="grid-config-group">
                                             <label>Opacity</label>
@@ -3238,8 +3241,8 @@
 
             // Setup scroll synchronization - make grid follow image scroll
             const syncScroll = () => {
-                const scrollX = imageDisplay.scrollLeft;
-                const scrollY = imageDisplay.scrollTop;
+                const scrollX = -imageDisplay.scrollLeft;
+                const scrollY = -imageDisplay.scrollTop;
                 gridOverlay.style.transform = `translate(${scrollX}px, ${scrollY}px)`;
             };
 
