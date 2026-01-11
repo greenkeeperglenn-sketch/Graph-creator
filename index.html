@@ -1286,7 +1286,7 @@
             <p class="subtitle">STRI's Data Visualisation Tool</p>
         </div>
         <div class="header-title" id="projectTitle">Untitled Project</div>
-        <div class="version-indicator">v3.3 - FIXED</div>
+        <div class="version-indicator">v3.4 - RESIZE</div>
     </div>
 
     <div class="tab-bar">
@@ -3265,14 +3265,41 @@
                     const dx = e.clientX - startX;
                     const dy = e.clientY - startY;
 
-                    // Simple proportional resize for now
+                    // Resize based on which handle is being dragged
                     if (resizeHandle === 'br') {
+                        // Bottom-right: expand width and height
                         tab.gridState.width = Math.max(100, tab.gridState.width + dx);
                         tab.gridState.height = Math.max(100, tab.gridState.height + dy);
-                        startX = e.clientX;
-                        startY = e.clientY;
-                        renderGrid(tabId);
+                    } else if (resizeHandle === 'bl') {
+                        // Bottom-left: move x, change width, expand height
+                        const newWidth = Math.max(100, tab.gridState.width - dx);
+                        const widthDiff = tab.gridState.width - newWidth;
+                        tab.gridState.x += widthDiff;
+                        tab.gridState.width = newWidth;
+                        tab.gridState.height = Math.max(100, tab.gridState.height + dy);
+                    } else if (resizeHandle === 'tr') {
+                        // Top-right: expand width, move y, change height
+                        tab.gridState.width = Math.max(100, tab.gridState.width + dx);
+                        const newHeight = Math.max(100, tab.gridState.height - dy);
+                        const heightDiff = tab.gridState.height - newHeight;
+                        tab.gridState.y += heightDiff;
+                        tab.gridState.height = newHeight;
+                    } else if (resizeHandle === 'tl') {
+                        // Top-left: move both x and y, change both dimensions
+                        const newWidth = Math.max(100, tab.gridState.width - dx);
+                        const widthDiff = tab.gridState.width - newWidth;
+                        tab.gridState.x += widthDiff;
+                        tab.gridState.width = newWidth;
+
+                        const newHeight = Math.max(100, tab.gridState.height - dy);
+                        const heightDiff = tab.gridState.height - newHeight;
+                        tab.gridState.y += heightDiff;
+                        tab.gridState.height = newHeight;
                     }
+
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    renderGrid(tabId);
                 } else if (isRotating) {
                     const centerX = tab.gridState.x + tab.gridState.width / 2;
                     const centerY = tab.gridState.y + tab.gridState.height / 2;
