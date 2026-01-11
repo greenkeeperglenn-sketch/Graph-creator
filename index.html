@@ -2610,7 +2610,7 @@
             images.sort((a, b) => new Date(a.date) - new Date(b.date));
 
             imageList.innerHTML = images.map((img, index) => `
-                <div class="image-item ${index === 0 ? 'active' : ''}" onclick="selectImage('${tabId}', '${img.id}')">
+                <div class="image-item ${index === 0 ? 'active' : ''}" data-image-id="${img.id}" onclick="selectImage('${tabId}', '${img.id}')">
                     <img src="${img.thumbnail}" class="image-thumbnail" alt="${img.fileName}">
                     <div class="image-info">
                         <div class="image-date">${formatDate(img.date)}</div>
@@ -2632,7 +2632,12 @@
             document.querySelectorAll(`#imageList_${tabId} .image-item`).forEach(item => {
                 item.classList.remove('active');
             });
-            event?.target.closest('.image-item')?.classList.add('active');
+
+            // Find and activate the clicked item
+            const activeItem = document.querySelector(`#imageList_${tabId} .image-item[data-image-id="${imageId}"]`);
+            if (activeItem) {
+                activeItem.classList.add('active');
+            }
 
             // Load and display image
             const imageRecord = await imageDB.get(imageId);
