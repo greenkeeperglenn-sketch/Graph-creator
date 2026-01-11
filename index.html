@@ -1286,7 +1286,7 @@
             <p class="subtitle">STRI's Data Visualisation Tool</p>
         </div>
         <div class="header-title" id="projectTitle">Untitled Project</div>
-        <div class="version-indicator">v3.5 - HANDLES</div>
+        <div class="version-indicator">v4.0 - SCROLL</div>
     </div>
 
     <div class="tab-bar">
@@ -1707,26 +1707,20 @@
                                 </div>
                             </div>
                             <div class="image-display-container">
-                                <div class="image-display" id="imageDisplay_${tab.id}">
+                                <div class="image-display" id="imageDisplay_${tab.id}" style="position: relative;">
                                     <div class="empty-state">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                                             <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                                         </svg>
                                         <p>Upload a drone image to get started</p>
                                     </div>
+                                    <!-- SVG Grid Overlay (inside imageDisplay so it scrolls with image) -->
+                                    <svg id="gridOverlay_${tab.id}" style="display: none; position: absolute; top: 0; left: 0; pointer-events: none; z-index: 5;">
+                                        <g id="gridGroup_${tab.id}" style="pointer-events: all;">
+                                            <!-- Grid will be rendered here -->
+                                        </g>
+                                    </svg>
                                 </div>
-
-                                <!-- SVG Grid Overlay (outside imageDisplay so it doesn't get wiped by innerHTML) -->
-                                <svg id="gridOverlay_${tab.id}" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5;">
-                                    <defs>
-                                        <pattern id="gridPattern_${tab.id}" patternUnits="userSpaceOnUse" width="100" height="100">
-                                            <path d="M 100 0 L 0 0 0 100" fill="none" stroke="rgba(16, 185, 129, 0.5)" stroke-width="2"/>
-                                        </pattern>
-                                    </defs>
-                                    <g id="gridGroup_${tab.id}" style="pointer-events: all;">
-                                        <!-- Grid will be rendered here -->
-                                    </g>
-                                </svg>
 
                                 <div class="image-controls" id="imageControls_${tab.id}" style="display: none;">
                                     <button class="image-control-btn" onclick="fitImageToScreen('${tab.id}')">📐 Fit to Screen</button>
@@ -1770,11 +1764,31 @@
                                     Pull treatments from another graph or generate one in this tab
                                 </div>
 
+                                <div style="margin-top: 16px; padding: 12px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px;">
+                                    <div style="font-size: 0.85em; color: rgba(245, 158, 11, 1); font-weight: 600; margin-bottom: 12px;">⚙️ Manual Grid Override</div>
+                                    <div style="font-size: 0.85em; color: rgba(255,255,255,0.6); margin-bottom: 12px;">
+                                        Override auto-calculated grid dimensions for fields with blanks/missing plots
+                                    </div>
+                                    <div class="grid-config-row">
+                                        <div class="grid-config-group">
+                                            <label>Grid Columns</label>
+                                            <input type="number" id="manualCols_${tab.id}" placeholder="Auto" min="1" max="50">
+                                        </div>
+                                        <div class="grid-config-group">
+                                            <label>Grid Rows</label>
+                                            <input type="number" id="manualRows_${tab.id}" placeholder="Auto" min="1" max="50">
+                                        </div>
+                                    </div>
+                                    <div style="font-size: 0.75em; color: rgba(255,255,255,0.4); margin-top: 8px;">
+                                        Leave blank for auto (treatments × replicates)
+                                    </div>
+                                </div>
+
                                 <div id="gridInfo_${tab.id}" style="margin-top: 16px; padding: 12px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; display: none;">
                                     <div style="font-size: 0.85em; color: rgba(16, 185, 129, 1); font-weight: 600; margin-bottom: 8px;">Grid Layout</div>
                                     <div style="font-size: 0.85em; color: rgba(255,255,255,0.7);">
-                                        Columns: <span id="gridCols_${tab.id}">0</span> (treatments)<br>
-                                        Rows: <span id="gridRows_${tab.id}">0</span> (replicates)<br>
+                                        Columns: <span id="gridCols_${tab.id}">0</span><br>
+                                        Rows: <span id="gridRows_${tab.id}">0</span><br>
                                         Total cells: <span id="gridCells_${tab.id}">0</span>
                                     </div>
                                 </div>
@@ -3066,16 +3080,22 @@
                 return;
             }
 
+            // Check for manual overrides first
+            const manualCols = parseInt(document.getElementById(`manualCols_${tabId}`)?.value);
+            const manualRows = parseInt(document.getElementById(`manualRows_${tabId}`)?.value);
+
             const replicates = parseInt(document.getElementById(`replicates_${tabId}`)?.value) || 4;
             const treatments = tab.treatments.length;
-            const cols = treatments; // Columns = treatments
-            const rows = replicates; // Rows = replicates
 
-            console.log('Grid dimensions:', { cols, rows, totalCells: cols * rows });
+            // Use manual overrides if provided, otherwise auto-calculate
+            const cols = manualCols || treatments; // Columns = manual or treatments
+            const rows = manualRows || replicates; // Rows = manual or replicates
+
+            console.log('Grid dimensions:', { cols, rows, totalCells: cols * rows, manual: { cols: manualCols, rows: manualRows } });
 
             // Update grid info display
-            document.getElementById(`gridCols_${tabId}`).textContent = cols;
-            document.getElementById(`gridRows_${tabId}`).textContent = rows;
+            document.getElementById(`gridCols_${tabId}`).textContent = cols + (manualCols ? ' (manual)' : '');
+            document.getElementById(`gridRows_${tabId}`).textContent = rows + (manualRows ? ' (manual)' : '');
             document.getElementById(`gridCells_${tabId}`).textContent = cols * rows;
 
             const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
@@ -3097,9 +3117,12 @@
             const imgWidth = img.clientWidth;
             const imgHeight = img.clientHeight;
 
-            // Calculate cell dimensions
-            const cellWidth = imgWidth / cols;
-            const cellHeight = imgHeight / rows;
+            // Get the SVG overlay and set its size to match the image exactly
+            const gridOverlay = document.getElementById(`gridOverlay_${tabId}`);
+            gridOverlay.setAttribute('width', imgWidth);
+            gridOverlay.setAttribute('height', imgHeight);
+            gridOverlay.style.width = imgWidth + 'px';
+            gridOverlay.style.height = imgHeight + 'px';
 
             // Initialize grid state if not exists
             if (!tab.gridState) {
