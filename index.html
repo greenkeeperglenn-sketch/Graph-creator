@@ -1286,7 +1286,7 @@
             <p class="subtitle">STRI's Data Visualisation Tool</p>
         </div>
         <div class="header-title" id="projectTitle">Untitled Project</div>
-        <div class="version-indicator">v3.4 - RESIZE</div>
+        <div class="version-indicator">v3.5 - HANDLES</div>
     </div>
 
     <div class="tab-bar">
@@ -3159,13 +3159,14 @@
                 gridContainer.appendChild(line);
             }
 
-            // Add resize handles (corners)
-            const handleSize = 12;
+            // Add resize handles (corners) - moved inward for visibility
+            const handleSize = 15;
+            const inset = 20; // Move handles inward by 20px
             const handles = [
-                { x: 0, y: 0, cursor: 'nwse-resize', type: 'tl' },
-                { x: gridState.width, y: 0, cursor: 'nesw-resize', type: 'tr' },
-                { x: 0, y: gridState.height, cursor: 'nesw-resize', type: 'bl' },
-                { x: gridState.width, y: gridState.height, cursor: 'nwse-resize', type: 'br' }
+                { x: inset, y: inset, cursor: 'nwse-resize', type: 'tl' },
+                { x: gridState.width - inset, y: inset, cursor: 'nesw-resize', type: 'tr' },
+                { x: inset, y: gridState.height - inset, cursor: 'nesw-resize', type: 'bl' },
+                { x: gridState.width - inset, y: gridState.height - inset, cursor: 'nwse-resize', type: 'br' }
             ];
 
             handles.forEach(h => {
@@ -3299,7 +3300,7 @@
 
                     startX = e.clientX;
                     startY = e.clientY;
-                    renderGrid(tabId);
+                    // Don't render during drag - only on mouseup to prevent destroying handles
                 } else if (isRotating) {
                     const centerX = tab.gridState.x + tab.gridState.width / 2;
                     const centerY = tab.gridState.y + tab.gridState.height / 2;
@@ -3310,20 +3311,33 @@
             });
 
             gridOverlay.addEventListener('mouseup', () => {
+                const wasResizing = isResizing;
                 isDragging = false;
                 isResizing = false;
                 isRotating = false;
                 resizeHandle = null;
-                gridContainer.style.cursor = 'move';
-                const rotHandle = gridContainer.querySelector('.grid-rotation-handle');
-                if (rotHandle) rotHandle.style.cursor = 'grab';
+
+                // Re-render grid after resize to update all elements
+                if (wasResizing) {
+                    renderGrid(tabId);
+                } else {
+                    gridContainer.style.cursor = 'move';
+                    const rotHandle = gridContainer.querySelector('.grid-rotation-handle');
+                    if (rotHandle) rotHandle.style.cursor = 'grab';
+                }
             });
 
             gridOverlay.addEventListener('mouseleave', () => {
+                const wasResizing = isResizing;
                 isDragging = false;
                 isResizing = false;
                 isRotating = false;
                 resizeHandle = null;
+
+                // Re-render if we were resizing when mouse left
+                if (wasResizing) {
+                    renderGrid(tabId);
+                }
             });
 
             // Set initial cursor
