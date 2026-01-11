@@ -2847,6 +2847,70 @@
             console.log('✓ Treatment sync completed successfully');
         }
 
+        // Extract image for a specific cell
+        function extractCellImage(img, corners, cols, rows, row, col) {
+            const [tl, tr, br, bl] = corners;
+
+            // Bilinear interpolation helper
+            const interpolate = (u, v) => {
+                const top_x = tl.x + u * (tr.x - tl.x);
+                const top_y = tl.y + u * (tr.y - tl.y);
+                const bottom_x = bl.x + u * (br.x - bl.x);
+                const bottom_y = bl.y + u * (br.y - bl.y);
+                return {
+                    x: top_x + v * (bottom_x - top_x),
+                    y: top_y + v * (bottom_y - top_y)
+                };
+            };
+
+            // Get the four corners of this cell
+            const u1 = col / cols;
+            const u2 = (col + 1) / cols;
+            const v1 = row / rows;
+            const v2 = (row + 1) / rows;
+
+            const cellTL = interpolate(u1, v1);
+            const cellTR = interpolate(u2, v1);
+            const cellBR = interpolate(u2, v2);
+            const cellBL = interpolate(u1, v2);
+
+            // Calculate bounding box
+            const minX = Math.min(cellTL.x, cellTR.x, cellBR.x, cellBL.x);
+            const maxX = Math.max(cellTL.x, cellTR.x, cellBR.x, cellBL.x);
+            const minY = Math.min(cellTL.y, cellTR.y, cellBR.y, cellBL.y);
+            const maxY = Math.max(cellTL.y, cellTR.y, cellBR.y, cellBL.y);
+
+            const width = maxX - minX;
+            const height = maxY - minY;
+
+            // Get the actual rendered image bounds
+            const bounds = getRenderedImageBounds(img);
+
+            // Calculate the source coordinates in the actual image
+            const scaleX = img.naturalWidth / bounds.width;
+            const scaleY = img.naturalHeight / bounds.height;
+
+            const srcX = minX * scaleX;
+            const srcY = minY * scaleY;
+            const srcWidth = width * scaleX;
+            const srcHeight = height * scaleY;
+
+            // Create canvas to extract the image
+            const canvas = document.createElement('canvas');
+            canvas.width = 200;  // Fixed display size
+            canvas.height = 200;
+            const ctx = canvas.getContext('2d');
+
+            // Draw the extracted portion
+            ctx.drawImage(
+                img,
+                srcX, srcY, srcWidth, srcHeight,  // Source rectangle
+                0, 0, 200, 200  // Destination rectangle
+            );
+
+            return canvas.toDataURL('image/jpeg', 0.9);
+        }
+
         // View breakdown - show treatments grouped with their plots
         function viewBreakdown(tabId) {
             const tab = tabs.find(t => t.id === tabId);
@@ -2857,12 +2921,12 @@
 
             const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
             const img = imageDisplay?.querySelector('img');
-            if (!img) {
-                showNotification('⚠️ No image loaded');
+            if (!img || !img.complete) {
+                showNotification('⚠️ No image loaded or image still loading');
                 return;
             }
 
-            // Group cells by treatment
+            // Group cells by treatment and extract images
             const treatmentGroups = {};
             Object.entries(tab.gridState.cellTreatments).forEach(([cellKey, cellData]) => {
                 if (!treatmentGroups[cellData.name]) {
@@ -2872,7 +2936,23 @@
                     };
                 }
                 const [row, col] = cellKey.split('_').map(Number);
-                treatmentGroups[cellData.name].cells.push({ row, col, cellKey });
+
+                // Extract the cell image
+                const imageData = extractCellImage(
+                    img,
+                    tab.gridState.corners,
+                    tab.gridState.cols,
+                    tab.gridState.rows,
+                    row,
+                    col
+                );
+
+                treatmentGroups[cellData.name].cells.push({
+                    row,
+                    col,
+                    cellKey,
+                    imageData
+                });
             });
 
             // Create modal overlay
@@ -2937,17 +3017,59 @@
                     padding: 16px;
                 `;
 
-                treatmentCard.innerHTML = `
-                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                        <div style="width: 20px; height: 20px; background: ${data.color}; border-radius: 4px;"></div>
-                        <h3 style="margin: 0; font-size: 1.2em;">${treatmentName}</h3>
-                        <span style="margin-left: auto; color: rgba(255,255,255,0.6);">${data.cells.length} plots</span>
-                    </div>
-                    <div style="color: rgba(255,255,255,0.7); font-size: 0.9em; margin-bottom: 8px;">
-                        Cells: ${data.cells.map(c => `(${c.row + 1},${c.col + 1})`).join(', ')}
-                    </div>
+                // Create header
+                const header = document.createElement('div');
+                header.style.cssText = `
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    margin-bottom: 16px;
+                `;
+                header.innerHTML = `
+                    <div style="width: 20px; height: 20px; background: ${data.color}; border-radius: 4px;"></div>
+                    <h3 style="margin: 0; font-size: 1.2em;">${treatmentName}</h3>
+                    <span style="margin-left: auto; color: rgba(255,255,255,0.6);">${data.cells.length} plots</span>
+                `;
+                treatmentCard.appendChild(header);
+
+                // Create image grid for this treatment
+                const imageGrid = document.createElement('div');
+                imageGrid.style.cssText = `
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                    gap: 12px;
                 `;
 
+                data.cells.forEach(cell => {
+                    const cellContainer = document.createElement('div');
+                    cellContainer.style.cssText = `
+                        text-align: center;
+                    `;
+
+                    const cellImage = document.createElement('img');
+                    cellImage.src = cell.imageData;
+                    cellImage.style.cssText = `
+                        width: 100%;
+                        height: 150px;
+                        object-fit: cover;
+                        border-radius: 8px;
+                        border: 2px solid ${data.color};
+                    `;
+
+                    const cellLabel = document.createElement('div');
+                    cellLabel.style.cssText = `
+                        margin-top: 4px;
+                        font-size: 0.85em;
+                        color: rgba(255,255,255,0.7);
+                    `;
+                    cellLabel.textContent = `Cell (${cell.row + 1}, ${cell.col + 1})`;
+
+                    cellContainer.appendChild(cellImage);
+                    cellContainer.appendChild(cellLabel);
+                    imageGrid.appendChild(cellContainer);
+                });
+
+                treatmentCard.appendChild(imageGrid);
                 groupsContainer.appendChild(treatmentCard);
             });
 
@@ -2955,7 +3077,7 @@
             modal.appendChild(content);
             document.body.appendChild(modal);
 
-            showNotification('📊 Breakdown view opened');
+            showNotification('📊 Breakdown view opened - extracted ' + Object.keys(treatmentGroups).length + ' treatments');
         }
 
         // Update treatment counters to show remaining assignments
