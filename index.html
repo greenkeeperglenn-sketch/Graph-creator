@@ -3257,11 +3257,17 @@
             // Initial sync
             syncScroll();
 
-            showNotification(`✓ Grid created: ${cols} columns × ${rows} rows`);
+            // Only show notification if this is the first time creating the grid
+            if (!tab._gridCreated) {
+                showNotification(`✓ Grid created: ${cols} columns × ${rows} rows`);
+                tab._gridCreated = true;
+            }
         }
 
         // Update grid visual style
         function updateGridStyle(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (tab) tab._gridCreated = true; // Don't show notification for style updates
             renderGrid(tabId);
         }
 
@@ -3315,41 +3321,53 @@
                     const dx = e.clientX - startX;
                     const dy = e.clientY - startY;
 
-                    // Resize based on which handle is being dragged
-                    if (resizeHandle === 'br') {
-                        // Bottom-right: expand width and height
-                        tab.gridState.width = Math.max(100, tab.gridState.width + dx);
-                        tab.gridState.height = Math.max(100, tab.gridState.height + dy);
-                    } else if (resizeHandle === 'bl') {
-                        // Bottom-left: move x, change width, expand height
-                        const newWidth = Math.max(100, tab.gridState.width - dx);
-                        const widthDiff = tab.gridState.width - newWidth;
-                        tab.gridState.x += widthDiff;
-                        tab.gridState.width = newWidth;
-                        tab.gridState.height = Math.max(100, tab.gridState.height + dy);
-                    } else if (resizeHandle === 'tr') {
-                        // Top-right: expand width, move y, change height
-                        tab.gridState.width = Math.max(100, tab.gridState.width + dx);
-                        const newHeight = Math.max(100, tab.gridState.height - dy);
-                        const heightDiff = tab.gridState.height - newHeight;
-                        tab.gridState.y += heightDiff;
-                        tab.gridState.height = newHeight;
-                    } else if (resizeHandle === 'tl') {
-                        // Top-left: move both x and y, change both dimensions
-                        const newWidth = Math.max(100, tab.gridState.width - dx);
-                        const widthDiff = tab.gridState.width - newWidth;
-                        tab.gridState.x += widthDiff;
-                        tab.gridState.width = newWidth;
-
-                        const newHeight = Math.max(100, tab.gridState.height - dy);
-                        const heightDiff = tab.gridState.height - newHeight;
-                        tab.gridState.y += heightDiff;
-                        tab.gridState.height = newHeight;
+                    // Store original dimensions if not already stored
+                    if (!tab._resizeStart) {
+                        tab._resizeStart = {
+                            width: tab.gridState.width,
+                            height: tab.gridState.height,
+                            x: tab.gridState.x,
+                            y: tab.gridState.y
+                        };
                     }
 
-                    startX = e.clientX;
-                    startY = e.clientY;
-                    // Don't render during drag - only on mouseup to prevent destroying handles
+                    const orig = tab._resizeStart;
+
+                    // Calculate new dimensions based on handle
+                    let newWidth = orig.width;
+                    let newHeight = orig.height;
+                    let newX = orig.x;
+                    let newY = orig.y;
+
+                    if (resizeHandle === 'br') {
+                        newWidth = Math.max(100, orig.width + dx);
+                        newHeight = Math.max(100, orig.height + dy);
+                    } else if (resizeHandle === 'bl') {
+                        newWidth = Math.max(100, orig.width - dx);
+                        newX = orig.x + (orig.width - newWidth);
+                        newHeight = Math.max(100, orig.height + dy);
+                    } else if (resizeHandle === 'tr') {
+                        newWidth = Math.max(100, orig.width + dx);
+                        newHeight = Math.max(100, orig.height - dy);
+                        newY = orig.y + (orig.height - newHeight);
+                    } else if (resizeHandle === 'tl') {
+                        newWidth = Math.max(100, orig.width - dx);
+                        newHeight = Math.max(100, orig.height - dy);
+                        newX = orig.x + (orig.width - newWidth);
+                        newY = orig.y + (orig.height - newHeight);
+                    }
+
+                    // Update state
+                    tab.gridState.width = newWidth;
+                    tab.gridState.height = newHeight;
+                    tab.gridState.x = newX;
+                    tab.gridState.y = newY;
+
+                    // Apply transform for instant visual feedback
+                    const scaleX = newWidth / orig.width;
+                    const scaleY = newHeight / orig.height;
+                    gridContainer.style.transform = `translate(${newX}px, ${newY}px) scale(${scaleX}, ${scaleY}) rotate(${tab.gridState.rotation}deg)`;
+                    gridContainer.style.transformOrigin = `0 0`;
                 } else if (isRotating) {
                     const centerX = tab.gridState.x + tab.gridState.width / 2;
                     const centerY = tab.gridState.y + tab.gridState.height / 2;
@@ -3368,8 +3386,14 @@
                 isRotating = false;
                 resizeHandle = null;
 
-                // Re-render grid after resize to update all elements
+                // Clear resize start cache
+                if (tab._resizeStart) {
+                    delete tab._resizeStart;
+                }
+
+                // Re-render grid after resize to update all elements properly
                 if (wasResizing) {
+                    tab._gridCreated = true; // Don't show notification
                     renderGrid(tabId);
                 } else {
                     gridContainer.style.cursor = 'move';
@@ -3385,8 +3409,14 @@
                 isRotating = false;
                 resizeHandle = null;
 
+                // Clear resize start cache
+                if (tab._resizeStart) {
+                    delete tab._resizeStart;
+                }
+
                 // Re-render if we were resizing when mouse left
                 if (wasResizing) {
+                    tab._gridCreated = true; // Don't show notification
                     renderGrid(tabId);
                 }
             });
