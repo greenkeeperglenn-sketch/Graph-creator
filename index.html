@@ -1255,9 +1255,9 @@
         <div class="tab-add" onclick="addNewTab()" title="Add new graph">+</div>
         <div class="tab-count" id="tabCount">0 graphs</div>
         <div class="project-buttons">
-            <button class="project-btn save-btn" onclick="saveProject()" title="Save Project">💾 Save</button>
-            <button class="project-btn load-btn" onclick="document.getElementById('loadFileInput').click()" title="Load Project">📂 Load</button>
-            <input type="file" id="loadFileInput" accept=".json" style="display:none" onchange="loadProject(event)">
+            <button class="project-btn save-btn" onclick="saveProject()" title="Save Project as ZIP with Images">💾 Save</button>
+            <button class="project-btn load-btn" onclick="document.getElementById('loadFileInput').click()" title="Load Project from ZIP or JSON">📂 Load</button>
+            <input type="file" id="loadFileInput" accept=".json,.zip" style="display:none" onchange="loadProject(event)">
         </div>
     </div>
 
@@ -1345,8 +1345,10 @@
             localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
         }
 
-        // Save project to JSON file
-        function saveProject() {
+        // Save project to ZIP file with images
+        async function saveProject() {
+            showNotification('📦 Creating ZIP file with images...');
+
             const project = {
                 version: 2,
                 savedAt: new Date().toISOString(),
@@ -1373,26 +1375,46 @@
                     } : null
                 }))
             };
-            
-            // Use project name in filename
+
+            // Create ZIP file
+            const zip = new JSZip();
+
+            // Add project JSON
+            zip.file('project.json', JSON.stringify(project, null, 2));
+
+            // Add all images from IndexedDB
+            const allImages = await imageDB.getAll();
+            if (allImages.length > 0) {
+                const imagesFolder = zip.folder('images');
+                for (const image of allImages) {
+                    const fileName = `${image.id}_${image.fileName}`;
+                    imagesFolder.file(fileName, image.imageData);
+                }
+                showNotification(`📸 Added ${allImages.length} images to ZIP`);
+            }
+
+            // Generate ZIP blob
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+            // Download ZIP file
             const safeName = projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
+            const url = URL.createObjectURL(zipBlob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = safeName + '_' + new Date().toISOString().split('T')[0] + '.json';
+            a.download = safeName + '_' + new Date().toISOString().split('T')[0] + '.zip';
             a.click();
             URL.revokeObjectURL(url);
+
+            showNotification('✅ Project saved as ZIP with all images!');
         }
 
-        // Load project from JSON file
-        function loadProject(event) {
+        // Load project from JSON or ZIP file
+        async function loadProject(event) {
             const file = event.target.files[0];
             if (!file) return;
 
             // Extract filename without extension
             const fileName = file.name.replace(/\.[^/.]+$/, '');
-            // Clean up the filename - remove dates and underscores, capitalize
             const cleanName = fileName
                 .replace(/_\d{4}-\d{2}-\d{2}$/, '') // Remove trailing date
                 .replace(/_/g, ' ') // Replace underscores with spaces
@@ -1400,20 +1422,85 @@
                 .map(word => word.charAt(0).toUpperCase() + word.slice(1))
                 .join(' ');
 
-            const reader = new FileReader();
-            reader.onload = function(e) {
+            // Check if it's a ZIP file
+            if (file.name.endsWith('.zip')) {
+                showNotification('📦 Loading ZIP file...');
                 try {
-                    const project = JSON.parse(e.target.result);
+                    const zip = await JSZip.loadAsync(file);
+
+                    // Load project JSON
+                    const projectFile = zip.file('project.json');
+                    if (!projectFile) {
+                        alert('Invalid ZIP file: project.json not found');
+                        return;
+                    }
+
+                    const projectText = await projectFile.async('text');
+                    const project = JSON.parse(projectText);
+
+                    // Load images folder
+                    const imagesFolder = zip.folder('images');
+                    if (imagesFolder) {
+                        const imageFiles = [];
+                        imagesFolder.forEach((relativePath, file) => {
+                            imageFiles.push({ relativePath, file });
+                        });
+
+                        showNotification(`📸 Loading ${imageFiles.length} images...`);
+
+                        // Clear existing images from IndexedDB
+                        await imageDB.clear();
+
+                        // Load each image
+                        for (const { relativePath, file } of imageFiles) {
+                            const blob = await file.async('blob');
+
+                            // Extract original filename and ID
+                            const parts = relativePath.split('_');
+                            const id = parseInt(parts[0]);
+                            const originalFileName = parts.slice(1).join('_');
+
+                            // Store in IndexedDB
+                            await imageDB.add({
+                                id: id,
+                                fileName: originalFileName,
+                                imageData: blob,
+                                uploadedAt: new Date().toISOString()
+                            });
+                        }
+
+                        showNotification(`✅ Loaded ${imageFiles.length} images`);
+                    }
+
+                    // Load project data
                     loadProjectData(project, true);
-                    // Override project name with filename
                     projectName = cleanName || 'Untitled Project';
                     document.getElementById('projectTitle').textContent = projectName;
                     autoSave();
+
+                    showNotification('✅ Project loaded from ZIP!');
                 } catch (err) {
-                    alert('Failed to load project: ' + err.message);
+                    console.error('ZIP load error:', err);
+                    alert('Failed to load ZIP file: ' + err.message);
                 }
-            };
-            reader.readAsText(file);
+            } else {
+                // Load as JSON
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const project = JSON.parse(e.target.result);
+                        loadProjectData(project, true);
+                        projectName = cleanName || 'Untitled Project';
+                        document.getElementById('projectTitle').textContent = projectName;
+                        autoSave();
+                        showNotification('✅ Project loaded from JSON');
+                    } catch (err) {
+                        alert('Failed to load project: ' + err.message);
+                    }
+                };
+                reader.readAsText(file);
+            }
+
             event.target.value = ''; // Reset so same file can be loaded again
         }
 
@@ -2516,6 +2603,32 @@
                     request.onsuccess = () => resolve(request.result);
                     request.onerror = () => reject(request.error);
                 });
+            }
+
+            async getAll() {
+                const db = await this.open();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction('droneImages', 'readonly');
+                    const store = tx.objectStore('droneImages');
+                    const request = store.getAll();
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async clear() {
+                const db = await this.open();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction('droneImages', 'readwrite');
+                    const store = tx.objectStore('droneImages');
+                    const request = store.clear();
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async add(imageRecord) {
+                return this.save(imageRecord);
             }
 
             async delete(imageId) {
