@@ -2779,12 +2779,10 @@
             img.dataset.scale = newScale.toString();
             img.style.transform = `scale(${newScale})`;
 
-            // Re-render grid at new scale
+            // Scale grid with image if it exists
             const tab = tabs.find(t => t.id === tabId);
             if (tab && tab.gridState && tab.gridState.corners && tab.gridState.corners.length === 4) {
-                scaleGridToImage(tabId);
-                tab._gridCreated = true;
-                renderGrid(tabId);
+                scaleGridWithImage(tabId, newScale);
             }
         }
 
@@ -2797,48 +2795,36 @@
             img.style.transform = 'scale(1)';
             img.dataset.scale = '1';
 
-            // Re-render grid at new scale
+            // Scale grid with image if it exists
             const tab = tabs.find(t => t.id === tabId);
             if (tab && tab.gridState && tab.gridState.corners && tab.gridState.corners.length === 4) {
-                scaleGridToImage(tabId);
-                tab._gridCreated = true;
-                renderGrid(tabId);
+                scaleGridWithImage(tabId, 1);
             }
         }
 
-        // Scale grid corners proportionally to image size changes
-        function scaleGridToImage(tabId) {
+        // Scale grid with image zoom
+        function scaleGridWithImage(tabId, scale) {
             const tab = tabs.find(t => t.id === tabId);
-            if (!tab || !tab.gridState || !tab.gridState.corners) return;
+            if (!tab || !tab.gridState) return;
 
+            const gridOverlay = document.getElementById(`gridOverlay_${tabId}`);
+            if (!gridOverlay) return;
+
+            // Store the scale in gridState so scroll sync can use it
+            tab.gridState.currentScale = scale;
+
+            // Apply scale transform with transform origin at top left
+            gridOverlay.style.transformOrigin = 'top left';
+
+            // Get current scroll position to maintain it
             const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
-            const img = imageDisplay?.querySelector('img');
-            if (!img) return;
-
-            // Store original image dimensions when grid is first created
-            if (!tab.gridState.originalImageWidth) {
-                tab.gridState.originalImageWidth = img.clientWidth;
-                tab.gridState.originalImageHeight = img.clientHeight;
-                return; // First time, no scaling needed
+            if (imageDisplay) {
+                const scrollX = -imageDisplay.scrollLeft;
+                const scrollY = -imageDisplay.scrollTop;
+                gridOverlay.style.transform = `translate(${scrollX}px, ${scrollY}px) scale(${scale})`;
+            } else {
+                gridOverlay.style.transform = `scale(${scale})`;
             }
-
-            // Calculate scale factors
-            const scaleX = img.clientWidth / tab.gridState.originalImageWidth;
-            const scaleY = img.clientHeight / tab.gridState.originalImageHeight;
-
-            // Update corner positions proportionally
-            tab.gridState.corners = tab.gridState.corners.map(corner => ({
-                x: corner.x * scaleX / (tab.gridState.lastScaleX || 1),
-                y: corner.y * scaleY / (tab.gridState.lastScaleY || 1)
-            }));
-
-            // Store current scale for next time
-            tab.gridState.lastScaleX = scaleX;
-            tab.gridState.lastScaleY = scaleY;
-
-            // Update original dimensions to current
-            tab.gridState.originalImageWidth = img.clientWidth;
-            tab.gridState.originalImageHeight = img.clientHeight;
         }
 
         // Setup pan/drag functionality for zoomed images
@@ -3566,11 +3552,19 @@
                 setupCornerDragging(tabId);
             }
 
+            // Initialize grid scale from current image zoom if not set
+            if (!tab.gridState.currentScale) {
+                const currentImageScale = parseFloat(img.dataset.scale || 1);
+                tab.gridState.currentScale = currentImageScale;
+            }
+
             // Setup scroll synchronization
             const syncScroll = () => {
                 const scrollX = -imageDisplay.scrollLeft;
                 const scrollY = -imageDisplay.scrollTop;
-                gridOverlay.style.transform = `translate(${scrollX}px, ${scrollY}px)`;
+                const scale = tab.gridState.currentScale || 1;
+                gridOverlay.style.transformOrigin = 'top left';
+                gridOverlay.style.transform = `translate(${scrollX}px, ${scrollY}px) scale(${scale})`;
             };
 
             if (imageDisplay._gridScrollHandler) {
