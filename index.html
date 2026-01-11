@@ -70,19 +70,19 @@
         }
 
         .version-indicator {
-            background: linear-gradient(135deg, #f97316, #ea580c);
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
             color: white;
             padding: 8px 16px;
             border-radius: 20px;
             font-size: 0.85em;
             font-weight: 600;
-            box-shadow: 0 2px 8px rgba(249, 115, 22, 0.4);
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
             animation: pulse 2s infinite;
         }
 
         @keyframes pulse {
-            0%, 100% { box-shadow: 0 2px 8px rgba(249, 115, 22, 0.4); }
-            50% { box-shadow: 0 2px 16px rgba(249, 115, 22, 0.8); }
+            0%, 100% { box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4); }
+            50% { box-shadow: 0 2px 16px rgba(139, 92, 246, 0.8); }
         }
 
         /* Tab Bar */
@@ -1286,7 +1286,7 @@
             <p class="subtitle">STRI's Data Visualisation Tool</p>
         </div>
         <div class="header-title" id="projectTitle">Untitled Project</div>
-        <div class="version-indicator">v2.4 - DEBUG</div>
+        <div class="version-indicator">v2.5 - PULL</div>
     </div>
 
     <div class="tab-bar">
@@ -1729,8 +1729,22 @@
                                         <input type="number" id="treatmentCount_${tab.id}" value="0" disabled>
                                     </div>
                                 </div>
+
+                                <div class="grid-config-row" style="margin-top: 12px;">
+                                    <div class="grid-config-group" style="flex: 1;">
+                                        <label>Pull from Graph</label>
+                                        <select id="sourceGraph_${tab.id}" style="width: 100%; padding: 8px 12px; background: rgba(26, 26, 46, 0.8); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; color: #fff; font-size: 0.9em;">
+                                            <option value="">Select a graph...</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <button onclick="pullTreatmentsFromGraph('${tab.id}')" style="width: 100%; margin-top: 12px; padding: 10px; background: linear-gradient(135deg, #10b981, #059669); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; font-size: 0.9em; transition: all 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                                    📥 Pull Treatments
+                                </button>
+
                                 <div style="font-size: 0.85em; color: rgba(255,255,255,0.5); margin-top: 8px;">
-                                    Generate a graph first to see treatments
+                                    Pull treatments from another graph or generate one in this tab
                                 </div>
                             </div>
 
@@ -1989,6 +2003,9 @@
 
                 // Sync treatments to field map
                 syncFieldMapTreatments(tabId);
+
+                // Update all source graph dropdowns since we have a new graph with treatments
+                tabs.forEach(t => populateSourceGraphDropdown(t.id));
 
             } catch (e) {
                 statusEl.className = 'status error';
@@ -2370,6 +2387,8 @@
             } else {
                 graphArea.style.display = 'none';
                 fieldMapView.classList.add('active');
+                // Populate the source graph dropdown when switching to field map
+                populateSourceGraphDropdown(tabId);
             }
         }
 
@@ -2837,6 +2856,57 @@
             });
 
             console.log('✓ Treatment sync completed successfully');
+        }
+
+        // Populate the source graph dropdown with available graphs that have treatments
+        function populateSourceGraphDropdown(tabId) {
+            const dropdown = document.getElementById(`sourceGraph_${tabId}`);
+            if (!dropdown) return;
+
+            // Clear existing options except the first one
+            dropdown.innerHTML = '<option value="">Select a graph...</option>';
+
+            // Add all tabs that have treatments (excluding current tab)
+            tabs.forEach(tab => {
+                if (tab.id !== tabId && tab.treatments && tab.treatments.length > 0) {
+                    const option = document.createElement('option');
+                    option.value = tab.id;
+                    option.textContent = `${tab.name} (${tab.treatments.length} treatments)`;
+                    dropdown.appendChild(option);
+                }
+            });
+        }
+
+        // Pull treatments from selected graph
+        function pullTreatmentsFromGraph(targetTabId) {
+            const dropdown = document.getElementById(`sourceGraph_${targetTabId}`);
+            const sourceTabId = dropdown?.value;
+
+            if (!sourceTabId) {
+                showNotification('⚠️ Please select a graph to pull treatments from');
+                return;
+            }
+
+            const sourceTab = tabs.find(t => t.id === sourceTabId);
+            const targetTab = tabs.find(t => t.id === targetTabId);
+
+            if (!sourceTab || !sourceTab.treatments) {
+                showNotification('❌ Source graph has no treatments');
+                return;
+            }
+
+            if (!targetTab) {
+                showNotification('❌ Target tab not found');
+                return;
+            }
+
+            // Copy treatments to target tab
+            targetTab.treatments = JSON.parse(JSON.stringify(sourceTab.treatments));
+
+            // Sync to field map
+            syncFieldMapTreatments(targetTabId);
+
+            showNotification(`✓ Pulled ${sourceTab.treatments.length} treatments from "${sourceTab.name}"`);
         }
 
         // Setup field map event listeners
