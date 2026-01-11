@@ -3446,23 +3446,9 @@
 
             let isDragging = false;
             let dragCornerIndex = null;
-            let startX = 0;
-            let startY = 0;
 
-            gridContainer.addEventListener('mousedown', (e) => {
-                if (tab.gridState.locked) return;
-
-                if (e.target.classList.contains('grid-corner-handle')) {
-                    isDragging = true;
-                    dragCornerIndex = parseInt(e.target.getAttribute('data-corner-index'));
-                    startX = e.clientX;
-                    startY = e.clientY;
-                    e.target.style.cursor = 'grabbing';
-                    e.stopPropagation();
-                }
-            });
-
-            gridOverlay.addEventListener('mousemove', (e) => {
+            // Use document-level listeners to track mouse anywhere on page
+            const handleMouseMove = (e) => {
                 if (!isDragging || dragCornerIndex === null) return;
 
                 const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
@@ -3472,37 +3458,125 @@
                 const x = e.clientX - rect.left + imageDisplay.scrollLeft;
                 const y = e.clientY - rect.top + imageDisplay.scrollTop;
 
-                // Update corner position
+                // Update corner position in state
                 tab.gridState.corners[dragCornerIndex] = { x, y };
 
-                // Update visual position of the handle
+                // Update visual position of the handle only (don't re-render entire grid)
                 const handle = gridContainer.querySelector(`[data-corner-index="${dragCornerIndex}"]`);
                 if (handle) {
                     handle.setAttribute('cx', x);
                     handle.setAttribute('cy', y);
                 }
 
-                // Redraw grid lines to match new corner positions
-                renderGrid(tabId);
-            });
+                // Update label position too
+                const labels = gridContainer.querySelectorAll('text');
+                if (labels[dragCornerIndex]) {
+                    labels[dragCornerIndex].setAttribute('x', x);
+                    labels[dragCornerIndex].setAttribute('y', y - 18);
+                }
 
-            gridOverlay.addEventListener('mouseup', () => {
+                // Update grid lines dynamically (without destroying handles)
+                updateGridLines(tabId);
+            };
+
+            const handleMouseUp = () => {
                 if (isDragging) {
                     isDragging = false;
                     dragCornerIndex = null;
-                    const handles = gridContainer.querySelectorAll('.grid-corner-handle');
-                    handles.forEach(h => h.style.cursor = 'move');
-                }
-            });
 
-            gridOverlay.addEventListener('mouseleave', () => {
-                if (isDragging) {
-                    isDragging = false;
-                    dragCornerIndex = null;
-                    const handles = gridContainer.querySelectorAll('.grid-corner-handle');
+                    // Reset cursor
+                    const handles = document.querySelectorAll(`#gridContainer_${tabId} .grid-corner-handle`);
                     handles.forEach(h => h.style.cursor = 'move');
+
+                    // Remove listeners
+                    document.removeEventListener('mousemove', handleMouseMove);
+                    document.removeEventListener('mouseup', handleMouseUp);
+                }
+            };
+
+            // When drag starts, attach to document so we track mouse anywhere
+            gridContainer.addEventListener('mousedown', (e) => {
+                if (tab.gridState.locked) return;
+
+                if (e.target.classList.contains('grid-corner-handle')) {
+                    isDragging = true;
+                    dragCornerIndex = parseInt(e.target.getAttribute('data-corner-index'));
+                    e.target.style.cursor = 'grabbing';
+                    e.stopPropagation();
+
+                    // Attach document-level listeners
+                    document.addEventListener('mousemove', handleMouseMove);
+                    document.addEventListener('mouseup', handleMouseUp);
                 }
             });
+        }
+
+        // Update grid lines without re-rendering handles
+        function updateGridLines(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab || !tab.gridState || !tab.gridState.corners || tab.gridState.corners.length !== 4) return;
+
+            const gridContainer = document.getElementById(`gridContainer_${tabId}`);
+            if (!gridContainer) return;
+
+            const cols = tab.gridState.cols || 10;
+            const rows = tab.gridState.rows || 4;
+            const corners = tab.gridState.corners;
+            const [tl, tr, br, bl] = corners;
+
+            const opacity = parseFloat(document.getElementById(`gridOpacity_${tabId}`)?.value) || 0.7;
+            const lineWidth = parseFloat(document.getElementById(`gridLineWidth_${tabId}`)?.value) || 2;
+
+            // Bilinear interpolation
+            const interpolate = (u, v) => {
+                const top_x = tl.x + u * (tr.x - tl.x);
+                const top_y = tl.y + u * (tr.y - tl.y);
+                const bottom_x = bl.x + u * (br.x - bl.x);
+                const bottom_y = bl.y + u * (br.y - bl.y);
+
+                return {
+                    x: top_x + v * (bottom_x - top_x),
+                    y: top_y + v * (bottom_y - top_y)
+                };
+            };
+
+            // Remove old lines (keep handles and labels)
+            const lines = gridContainer.querySelectorAll('line');
+            lines.forEach(line => line.remove());
+
+            // Draw vertical lines
+            for (let i = 0; i <= cols; i++) {
+                const u = i / cols;
+                const p1 = interpolate(u, 0);
+                const p2 = interpolate(u, 1);
+
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', p1.x);
+                line.setAttribute('y1', p1.y);
+                line.setAttribute('x2', p2.x);
+                line.setAttribute('y2', p2.y);
+                line.setAttribute('stroke', `rgba(16, 185, 129, ${opacity})`);
+                line.setAttribute('stroke-width', lineWidth);
+                line.style.pointerEvents = 'none';
+                gridContainer.insertBefore(line, gridContainer.firstChild);
+            }
+
+            // Draw horizontal lines
+            for (let i = 0; i <= rows; i++) {
+                const v = i / rows;
+                const p1 = interpolate(0, v);
+                const p2 = interpolate(1, v);
+
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', p1.x);
+                line.setAttribute('y1', p1.y);
+                line.setAttribute('x2', p2.x);
+                line.setAttribute('y2', p2.y);
+                line.setAttribute('stroke', `rgba(16, 185, 129, ${opacity})`);
+                line.setAttribute('stroke-width', lineWidth);
+                line.style.pointerEvents = 'none';
+                gridContainer.insertBefore(line, gridContainer.firstChild);
+            }
         }
 
         // Setup field map event listeners
