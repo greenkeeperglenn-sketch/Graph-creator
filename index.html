@@ -70,19 +70,19 @@
         }
 
         .version-indicator {
-            background: linear-gradient(135deg, #06b6d4, #0891b2);
+            background: linear-gradient(135deg, #f59e0b, #d97706);
             color: white;
             padding: 8px 16px;
             border-radius: 20px;
             font-size: 0.85em;
             font-weight: 600;
-            box-shadow: 0 2px 8px rgba(6, 182, 212, 0.4);
+            box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
             animation: pulse 2s infinite;
         }
 
         @keyframes pulse {
-            0%, 100% { box-shadow: 0 2px 8px rgba(6, 182, 212, 0.4); }
-            50% { box-shadow: 0 2px 16px rgba(6, 182, 212, 0.8); }
+            0%, 100% { box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4); }
+            50% { box-shadow: 0 2px 16px rgba(245, 158, 11, 0.8); }
         }
 
         /* Tab Bar */
@@ -1286,7 +1286,7 @@
             <p class="subtitle">STRI's Data Visualisation Tool</p>
         </div>
         <div class="header-title" id="projectTitle">Untitled Project</div>
-        <div class="version-indicator">v3.1 - LOCK</div>
+        <div class="version-indicator">v3.2 - DEBUG</div>
     </div>
 
     <div class="tab-bar">
@@ -2962,6 +2962,9 @@
 
         // Toggle grid visibility
         function toggleGrid(tabId) {
+            console.log('=== toggleGrid called ===');
+            console.log('tabId:', tabId);
+
             const gridOverlay = document.getElementById(`gridOverlay_${tabId}`);
             const gridToggleBtn = document.getElementById(`gridToggle_${tabId}`);
             const lockGridBtn = document.getElementById(`lockGrid_${tabId}`);
@@ -2969,10 +2972,30 @@
             const gridControls = document.getElementById(`gridControls_${tabId}`);
             const tab = tabs.find(t => t.id === tabId);
 
-            if (!tab || !tab.treatments || tab.treatments.length === 0) {
-                showNotification('⚠️ Please add treatments first (use Pull Treatments or generate a graph)');
+            console.log('Elements found:', {
+                gridOverlay: !!gridOverlay,
+                gridToggleBtn: !!gridToggleBtn,
+                lockGridBtn: !!lockGridBtn,
+                gridInfo: !!gridInfo,
+                gridControls: !!gridControls,
+                tab: !!tab
+            });
+
+            if (!tab) {
+                showNotification('❌ Error: Tab not found');
+                console.error('Tab not found for id:', tabId);
                 return;
             }
+
+            console.log('Tab treatments:', tab.treatments);
+
+            if (!tab.treatments || tab.treatments.length === 0) {
+                showNotification('⚠️ Please add treatments first (use Pull Treatments or generate a graph)');
+                console.log('No treatments found in tab');
+                return;
+            }
+
+            console.log('Found', tab.treatments.length, 'treatments - proceeding with grid toggle');
 
             const isVisible = gridOverlay.style.display !== 'none';
 
@@ -3033,13 +3056,21 @@
 
         // Render the grid based on treatments and replicates
         function renderGrid(tabId) {
+            console.log('=== renderGrid called ===');
+            console.log('tabId:', tabId);
+
             const tab = tabs.find(t => t.id === tabId);
-            if (!tab || !tab.treatments) return;
+            if (!tab || !tab.treatments) {
+                console.error('Tab or treatments not found');
+                return;
+            }
 
             const replicates = parseInt(document.getElementById(`replicates_${tabId}`)?.value) || 4;
             const treatments = tab.treatments.length;
             const cols = treatments; // Columns = treatments
             const rows = replicates; // Rows = replicates
+
+            console.log('Grid dimensions:', { cols, rows, totalCells: cols * rows });
 
             // Update grid info display
             document.getElementById(`gridCols_${tabId}`).textContent = cols;
@@ -3047,11 +3078,19 @@
             document.getElementById(`gridCells_${tabId}`).textContent = cols * rows;
 
             const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
-            const img = imageDisplay.querySelector('img');
+            console.log('imageDisplay element:', imageDisplay);
+
+            const img = imageDisplay?.querySelector('img');
+            console.log('img element:', img);
+            console.log('img dimensions:', img ? { width: img.clientWidth, height: img.clientHeight } : 'no image');
+
             if (!img) {
                 showNotification('⚠️ Please upload an image first');
+                console.error('No image found in imageDisplay');
                 return;
             }
+
+            console.log('Image found, continuing with grid rendering...');
 
             // Get image dimensions
             const imgWidth = img.clientWidth;
