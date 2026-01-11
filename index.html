@@ -70,19 +70,19 @@
         }
 
         .version-indicator {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
+            background: linear-gradient(135deg, #10b981, #059669);
             color: white;
             padding: 8px 16px;
             border-radius: 20px;
             font-size: 0.85em;
             font-weight: 600;
-            box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
             animation: pulse 2s infinite;
         }
 
         @keyframes pulse {
-            0%, 100% { box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4); }
-            50% { box-shadow: 0 2px 16px rgba(245, 158, 11, 0.8); }
+            0%, 100% { box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4); }
+            50% { box-shadow: 0 2px 16px rgba(16, 185, 129, 0.8); }
         }
 
         /* Tab Bar */
@@ -1286,7 +1286,7 @@
             <p class="subtitle">STRI's Data Visualisation Tool</p>
         </div>
         <div class="header-title" id="projectTitle">Untitled Project</div>
-        <div class="version-indicator">v3.2 - DEBUG</div>
+        <div class="version-indicator">v3.3 - FIXED</div>
     </div>
 
     <div class="tab-bar">
@@ -1714,24 +1714,25 @@
                                         </svg>
                                         <p>Upload a drone image to get started</p>
                                     </div>
-                                    <!-- SVG Grid Overlay -->
-                                    <svg id="gridOverlay_${tab.id}" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5;">
-                                        <defs>
-                                            <pattern id="gridPattern_${tab.id}" patternUnits="userSpaceOnUse" width="100" height="100">
-                                                <path d="M 100 0 L 0 0 0 100" fill="none" stroke="rgba(16, 185, 129, 0.5)" stroke-width="2"/>
-                                            </pattern>
-                                        </defs>
-                                        <g id="gridGroup_${tab.id}" style="pointer-events: all;">
-                                            <!-- Grid will be rendered here -->
-                                        </g>
-                                    </svg>
+                                </div>
 
-                                    <div class="image-controls" id="imageControls_${tab.id}" style="display: none;">
-                                        <button class="image-control-btn" onclick="fitImageToScreen('${tab.id}')">📐 Fit to Screen</button>
-                                        <button class="image-control-btn" onclick="zoomImage('${tab.id}', 1.2)">🔍 Zoom In</button>
-                                        <button class="image-control-btn" onclick="zoomImage('${tab.id}', 0.8)">🔎 Zoom Out</button>
-                                        <button class="image-control-btn" onclick="viewActualSize('${tab.id}')">📏 100%</button>
-                                    </div>
+                                <!-- SVG Grid Overlay (outside imageDisplay so it doesn't get wiped by innerHTML) -->
+                                <svg id="gridOverlay_${tab.id}" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5;">
+                                    <defs>
+                                        <pattern id="gridPattern_${tab.id}" patternUnits="userSpaceOnUse" width="100" height="100">
+                                            <path d="M 100 0 L 0 0 0 100" fill="none" stroke="rgba(16, 185, 129, 0.5)" stroke-width="2"/>
+                                        </pattern>
+                                    </defs>
+                                    <g id="gridGroup_${tab.id}" style="pointer-events: all;">
+                                        <!-- Grid will be rendered here -->
+                                    </g>
+                                </svg>
+
+                                <div class="image-controls" id="imageControls_${tab.id}" style="display: none;">
+                                    <button class="image-control-btn" onclick="fitImageToScreen('${tab.id}')">📐 Fit to Screen</button>
+                                    <button class="image-control-btn" onclick="zoomImage('${tab.id}', 1.2)">🔍 Zoom In</button>
+                                    <button class="image-control-btn" onclick="zoomImage('${tab.id}', 0.8)">🔎 Zoom Out</button>
+                                    <button class="image-control-btn" onclick="viewActualSize('${tab.id}')">📏 100%</button>
                                 </div>
                             </div>
                         </div>
