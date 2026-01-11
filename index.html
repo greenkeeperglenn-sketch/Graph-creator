@@ -891,7 +891,9 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 16px;
             padding: 20px;
-            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
 
         .field-map-panel h3 {
@@ -905,6 +907,7 @@
         .field-map-left {
             width: 300px;
             flex-shrink: 0;
+            overflow-y: auto;
         }
 
         .field-map-center {
@@ -912,11 +915,13 @@
             display: flex;
             flex-direction: column;
             min-width: 0;
+            overflow: hidden;
         }
 
         .field-map-right {
             width: 320px;
             flex-shrink: 0;
+            overflow-y: auto;
         }
 
         /* Drop Zone */
@@ -1039,6 +1044,7 @@
             border-radius: 12px;
             overflow: hidden;
             position: relative;
+            min-height: 0;
         }
 
         .image-display {
@@ -1049,6 +1055,7 @@
             overflow: auto;
             position: relative;
             cursor: grab;
+            min-height: 0;
         }
 
         .image-display:active {
