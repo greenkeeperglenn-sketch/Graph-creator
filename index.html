@@ -7,6 +7,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Field Map Tool Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/exif-js@2.3.0/exif.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -822,6 +825,384 @@
         /* Tab content visibility */
         .tab-content { display: none; }
         .tab-content.active { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+        /* ===================================
+           FIELD MAP STYLES
+           =================================== */
+
+        /* View Switcher */
+        .view-switcher {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 16px;
+            background: rgba(0,0,0,0.2);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .view-switcher label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            color: rgba(255,255,255,0.6);
+            font-size: 0.9em;
+            font-weight: 500;
+            padding: 6px 12px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .view-switcher label:hover {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .view-switcher input[type="radio"] {
+            cursor: pointer;
+        }
+
+        .view-switcher input[type="radio"]:checked + span {
+            color: #10b981;
+            font-weight: 600;
+        }
+
+        /* Field Map Container */
+        .field-map-view {
+            display: none;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .field-map-view.active {
+            display: flex;
+        }
+
+        .field-map-content {
+            display: flex;
+            flex: 1;
+            gap: 20px;
+            padding: 20px;
+            overflow: hidden;
+        }
+
+        /* Field Map Panels */
+        .field-map-panel {
+            background: rgba(26, 26, 46, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .field-map-panel h3 {
+            color: #10b981;
+            font-size: 1.1em;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .field-map-left {
+            width: 300px;
+            flex-shrink: 0;
+        }
+
+        .field-map-center {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .field-map-right {
+            width: 320px;
+            flex-shrink: 0;
+        }
+
+        /* Drop Zone */
+        .drop-zone {
+            border: 2px dashed rgba(16, 185, 129, 0.4);
+            border-radius: 12px;
+            padding: 40px 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            background: rgba(16, 185, 129, 0.05);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .drop-zone:hover,
+        .drop-zone.drag-over {
+            border-color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .drop-zone-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .drop-zone-text {
+            color: #10b981;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .drop-zone-hint {
+            font-size: 0.85em;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Image Library */
+        .image-library {
+            margin-top: 20px;
+        }
+
+        .image-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .image-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: rgba(26, 26, 46, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .image-item:hover {
+            background: rgba(26, 26, 46, 1);
+            border-color: rgba(16, 185, 129, 0.5);
+        }
+
+        .image-item.active {
+            border-color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .image-thumbnail {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 6px;
+            flex-shrink: 0;
+        }
+
+        .image-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .image-date {
+            font-weight: 600;
+            color: #fff;
+            font-size: 0.9em;
+        }
+
+        .image-filename {
+            font-size: 0.75em;
+            color: rgba(255, 255, 255, 0.5);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .image-remove {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            color: rgba(255, 255, 255, 0.4);
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .image-remove:hover {
+            background: rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+        }
+
+        /* Image Display */
+        .image-display-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .image-display {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .image-display img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .image-display .empty-state {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .image-display .empty-state svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+
+        /* Grid Config */
+        .grid-config-section {
+            margin-bottom: 24px;
+        }
+
+        .grid-config-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .grid-config-group {
+            flex: 1;
+        }
+
+        .grid-config-group label {
+            display: block;
+            font-size: 0.85em;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 6px;
+        }
+
+        .grid-config-group input[type="number"] {
+            width: 100%;
+            padding: 8px 12px;
+            background: rgba(26, 26, 46, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: #fff;
+            font-family: 'Montserrat', sans-serif;
+        }
+
+        .grid-config-group input[type="number"]:focus {
+            outline: none;
+            border-color: #10b981;
+        }
+
+        /* Treatment Mapper */
+        .treatment-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .treatment-item {
+            background: rgba(26, 26, 46, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 12px;
+        }
+
+        .treatment-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .treatment-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        .treatment-name {
+            flex: 1;
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+
+        .treatment-tile {
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            color: white;
+            font-weight: 600;
+            cursor: grab;
+            user-select: none;
+            position: relative;
+            font-size: 0.85em;
+        }
+
+        .treatment-tile:active {
+            cursor: grabbing;
+        }
+
+        .treatment-tile.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .treatment-counter {
+            position: absolute;
+            top: 4px;
+            right: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+
+        .treatment-status {
+            margin-top: 8px;
+            font-size: 0.75em;
+            color: #94a3b8;
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(16, 185, 129, 0.95);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            font-size: 0.9em;
+            font-weight: 500;
+            z-index: 10000;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
     </style>
 </head>
 <body>
