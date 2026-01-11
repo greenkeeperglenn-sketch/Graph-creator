@@ -1082,11 +1082,16 @@
 
         /* Image Controls */
         .image-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
             display: flex;
             gap: 8px;
             padding: 12px;
-            background: rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.8);
             border-top: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 10;
         }
 
         .image-control-btn {
@@ -1670,12 +1675,12 @@
                                         </svg>
                                         <p>Upload a drone image to get started</p>
                                     </div>
-                                </div>
-                                <div class="image-controls" id="imageControls_${tab.id}" style="display: none;">
-                                    <button class="image-control-btn" onclick="fitImageToScreen('${tab.id}')">📐 Fit to Screen</button>
-                                    <button class="image-control-btn" onclick="zoomImage('${tab.id}', 1.2)">🔍 Zoom In</button>
-                                    <button class="image-control-btn" onclick="zoomImage('${tab.id}', 0.8)">🔎 Zoom Out</button>
-                                    <button class="image-control-btn" onclick="viewActualSize('${tab.id}')">📏 100%</button>
+                                    <div class="image-controls" id="imageControls_${tab.id}" style="display: none;">
+                                        <button class="image-control-btn" onclick="fitImageToScreen('${tab.id}')">📐 Fit to Screen</button>
+                                        <button class="image-control-btn" onclick="zoomImage('${tab.id}', 1.2)">🔍 Zoom In</button>
+                                        <button class="image-control-btn" onclick="zoomImage('${tab.id}', 0.8)">🔎 Zoom Out</button>
+                                        <button class="image-control-btn" onclick="viewActualSize('${tab.id}')">📏 100%</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
