@@ -3059,28 +3059,26 @@
             }
 
             const lockGridBtn = document.getElementById(`lockGrid_${tabId}`);
-            const gridContainer = document.getElementById(`gridContainer_${tabId}`);
 
             if (tab.gridState.locked) {
                 // Unlock grid
                 tab.gridState.locked = false;
                 lockGridBtn.textContent = '🔒 Lock Grid';
                 lockGridBtn.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
-                if (gridContainer) {
-                    gridContainer.style.cursor = 'move';
-                    gridContainer.style.pointerEvents = 'all';
-                }
-                showNotification('🔓 Grid unlocked - you can adjust position');
+                showNotification('🔓 Grid unlocked - you can adjust corners');
+
+                // Re-render to show corner handles
+                renderGrid(tabId);
             } else {
                 // Lock grid
                 tab.gridState.locked = true;
                 lockGridBtn.textContent = '🔓 Unlock Grid';
                 lockGridBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-                if (gridContainer) {
-                    gridContainer.style.cursor = 'default';
-                    gridContainer.style.pointerEvents = 'none';
-                }
-                showNotification('🔒 Grid locked - ready for treatment assignment');
+                showNotification('🔒 Grid locked - drag treatments onto cells to assign');
+
+                // Re-render to hide corner handles
+                renderGrid(tabId);
+
                 autoSave();
             }
         }
@@ -3376,39 +3374,128 @@
                 gridContainer.appendChild(line);
             }
 
-            // Add draggable corner handles
-            const handleSize = 12;
-            corners.forEach((corner, index) => {
-                const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                handle.setAttribute('cx', corner.x);
-                handle.setAttribute('cy', corner.y);
-                handle.setAttribute('r', handleSize);
-                handle.setAttribute('fill', '#10b981');
-                handle.setAttribute('stroke', '#fff');
-                handle.setAttribute('stroke-width', 3);
-                handle.setAttribute('cursor', 'move');
-                handle.setAttribute('data-corner-index', index);
-                handle.classList.add('grid-corner-handle');
-                gridContainer.appendChild(handle);
+            // Add interactive grid cells for treatment assignment
+            if (!tab.gridState.cellTreatments) {
+                tab.gridState.cellTreatments = {};
+            }
 
-                // Add label
-                const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                label.setAttribute('x', corner.x);
-                label.setAttribute('y', corner.y - 18);
-                label.setAttribute('text-anchor', 'middle');
-                label.setAttribute('fill', 'white');
-                label.setAttribute('font-size', '12');
-                label.setAttribute('font-weight', 'bold');
-                label.setAttribute('pointer-events', 'none');
-                const cornerNames = ['TL', 'TR', 'BR', 'BL'];
-                label.textContent = cornerNames[index];
-                gridContainer.appendChild(label);
-            });
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    // Calculate cell corners using bilinear interpolation
+                    const u1 = col / cols;
+                    const u2 = (col + 1) / cols;
+                    const v1 = row / rows;
+                    const v2 = (row + 1) / rows;
+
+                    const p1 = interpolate(u1, v1); // top-left
+                    const p2 = interpolate(u2, v1); // top-right
+                    const p3 = interpolate(u2, v2); // bottom-right
+                    const p4 = interpolate(u1, v2); // bottom-left
+
+                    // Create cell polygon
+                    const cellPath = `M ${p1.x},${p1.y} L ${p2.x},${p2.y} L ${p3.x},${p3.y} L ${p4.x},${p4.y} Z`;
+                    const cell = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    cell.setAttribute('d', cellPath);
+                    cell.setAttribute('fill', 'transparent');
+                    cell.setAttribute('stroke', 'none');
+                    cell.setAttribute('data-row', row);
+                    cell.setAttribute('data-col', col);
+                    cell.classList.add('grid-cell');
+                    cell.style.cursor = 'pointer';
+
+                    // If cell has treatment assigned, show it
+                    const cellKey = `${row}_${col}`;
+                    if (tab.gridState.cellTreatments[cellKey]) {
+                        const treatment = tab.gridState.cellTreatments[cellKey];
+                        cell.setAttribute('fill', treatment.color);
+                        cell.setAttribute('fill-opacity', '0.3');
+                    }
+
+                    // Add drop zone for treatments
+                    cell.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        cell.setAttribute('fill-opacity', '0.5');
+                    });
+
+                    cell.addEventListener('dragleave', () => {
+                        const cellKey = `${row}_${col}`;
+                        if (tab.gridState.cellTreatments[cellKey]) {
+                            cell.setAttribute('fill-opacity', '0.3');
+                        } else {
+                            cell.setAttribute('fill', 'transparent');
+                        }
+                    });
+
+                    cell.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        const treatmentName = e.dataTransfer.getData('treatment');
+                        const color = e.dataTransfer.getData('color');
+
+                        if (treatmentName && color) {
+                            tab.gridState.cellTreatments[cellKey] = { name: treatmentName, color: color };
+                            cell.setAttribute('fill', color);
+                            cell.setAttribute('fill-opacity', '0.3');
+                            showNotification(`✓ ${treatmentName} assigned to cell (${row + 1}, ${col + 1})`);
+                        }
+                    });
+
+                    gridContainer.appendChild(cell);
+
+                    // Add treatment label if assigned
+                    if (tab.gridState.cellTreatments[cellKey]) {
+                        const center = interpolate(u1 + 0.5 / cols, v1 + 0.5 / rows);
+                        const treatmentLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                        treatmentLabel.setAttribute('x', center.x);
+                        treatmentLabel.setAttribute('y', center.y);
+                        treatmentLabel.setAttribute('text-anchor', 'middle');
+                        treatmentLabel.setAttribute('dominant-baseline', 'middle');
+                        treatmentLabel.setAttribute('fill', 'white');
+                        treatmentLabel.setAttribute('font-size', '10');
+                        treatmentLabel.setAttribute('font-weight', 'bold');
+                        treatmentLabel.setAttribute('pointer-events', 'none');
+                        treatmentLabel.textContent = tab.gridState.cellTreatments[cellKey].name;
+                        gridContainer.appendChild(treatmentLabel);
+                    }
+                }
+            }
+
+            // Add draggable corner handles (only if not locked)
+            if (!tab.gridState.locked) {
+                const handleSize = 12;
+                corners.forEach((corner, index) => {
+                    const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    handle.setAttribute('cx', corner.x);
+                    handle.setAttribute('cy', corner.y);
+                    handle.setAttribute('r', handleSize);
+                    handle.setAttribute('fill', '#10b981');
+                    handle.setAttribute('stroke', '#fff');
+                    handle.setAttribute('stroke-width', 3);
+                    handle.setAttribute('cursor', 'move');
+                    handle.setAttribute('data-corner-index', index);
+                    handle.classList.add('grid-corner-handle');
+                    gridContainer.appendChild(handle);
+
+                    // Add label
+                    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    label.setAttribute('x', corner.x);
+                    label.setAttribute('y', corner.y - 18);
+                    label.setAttribute('text-anchor', 'middle');
+                    label.setAttribute('fill', 'white');
+                    label.setAttribute('font-size', '12');
+                    label.setAttribute('font-weight', 'bold');
+                    label.setAttribute('pointer-events', 'none');
+                    const cornerNames = ['TL', 'TR', 'BR', 'BL'];
+                    label.textContent = cornerNames[index];
+                    gridContainer.appendChild(label);
+                });
+            }
 
             gridGroup.appendChild(gridContainer);
 
-            // Setup corner dragging interactions
-            setupCornerDragging(tabId);
+            // Setup corner dragging interactions (only if not locked)
+            if (!tab.gridState.locked) {
+                setupCornerDragging(tabId);
+            }
 
             // Setup scroll synchronization
             const syncScroll = () => {
