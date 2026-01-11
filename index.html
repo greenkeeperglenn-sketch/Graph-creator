@@ -2758,17 +2758,34 @@
         // Sync treatments from graph to field map
         function syncFieldMapTreatments(tabId) {
             const tab = tabs.find(t => t.id === tabId);
-            if (!tab || !tab.treatments || tab.treatments.length === 0) return;
+            console.log('syncFieldMapTreatments called for tab:', tabId, 'tab:', tab);
+
+            if (!tab) {
+                console.log('Tab not found');
+                return;
+            }
+
+            if (!tab.treatments || tab.treatments.length === 0) {
+                console.log('No treatments found in tab');
+                return;
+            }
+
+            console.log('Found treatments:', tab.treatments);
 
             // Update treatment count
             const treatmentCountInput = document.getElementById(`treatmentCount_${tabId}`);
+            console.log('treatmentCountInput:', treatmentCountInput);
             if (treatmentCountInput) {
                 treatmentCountInput.value = tab.treatments.length;
             }
 
             // Update treatment list in mapper
             const treatmentList = document.getElementById(`treatmentList_${tabId}`);
-            if (!treatmentList) return;
+            console.log('treatmentList element:', treatmentList);
+            if (!treatmentList) {
+                console.log('Treatment list element not found');
+                return;
+            }
 
             const replicates = parseInt(document.getElementById(`replicates_${tabId}`)?.value) || 4;
 
