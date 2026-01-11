@@ -2758,6 +2758,14 @@
                 imageDisplay.scrollLeft = 0;
                 imageDisplay.scrollTop = 0;
             }
+
+            // Re-render grid at new scale
+            const tab = tabs.find(t => t.id === tabId);
+            if (tab && tab.gridState && tab.gridState.corners && tab.gridState.corners.length === 4) {
+                scaleGridToImage(tabId);
+                tab._gridCreated = true;
+                renderGrid(tabId);
+            }
         }
 
         // Zoom image by factor
@@ -2770,6 +2778,14 @@
             const newScale = Math.max(0.1, Math.min(5, currentScale * factor)); // Limit between 0.1x and 5x
             img.dataset.scale = newScale.toString();
             img.style.transform = `scale(${newScale})`;
+
+            // Re-render grid at new scale
+            const tab = tabs.find(t => t.id === tabId);
+            if (tab && tab.gridState && tab.gridState.corners && tab.gridState.corners.length === 4) {
+                scaleGridToImage(tabId);
+                tab._gridCreated = true;
+                renderGrid(tabId);
+            }
         }
 
         // View image at actual size (100%)
@@ -2780,6 +2796,49 @@
             img.classList.add('zoomed');
             img.style.transform = 'scale(1)';
             img.dataset.scale = '1';
+
+            // Re-render grid at new scale
+            const tab = tabs.find(t => t.id === tabId);
+            if (tab && tab.gridState && tab.gridState.corners && tab.gridState.corners.length === 4) {
+                scaleGridToImage(tabId);
+                tab._gridCreated = true;
+                renderGrid(tabId);
+            }
+        }
+
+        // Scale grid corners proportionally to image size changes
+        function scaleGridToImage(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab || !tab.gridState || !tab.gridState.corners) return;
+
+            const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
+            const img = imageDisplay?.querySelector('img');
+            if (!img) return;
+
+            // Store original image dimensions when grid is first created
+            if (!tab.gridState.originalImageWidth) {
+                tab.gridState.originalImageWidth = img.clientWidth;
+                tab.gridState.originalImageHeight = img.clientHeight;
+                return; // First time, no scaling needed
+            }
+
+            // Calculate scale factors
+            const scaleX = img.clientWidth / tab.gridState.originalImageWidth;
+            const scaleY = img.clientHeight / tab.gridState.originalImageHeight;
+
+            // Update corner positions proportionally
+            tab.gridState.corners = tab.gridState.corners.map(corner => ({
+                x: corner.x * scaleX / (tab.gridState.lastScaleX || 1),
+                y: corner.y * scaleY / (tab.gridState.lastScaleY || 1)
+            }));
+
+            // Store current scale for next time
+            tab.gridState.lastScaleX = scaleX;
+            tab.gridState.lastScaleY = scaleY;
+
+            // Update original dimensions to current
+            tab.gridState.originalImageWidth = img.clientWidth;
+            tab.gridState.originalImageHeight = img.clientHeight;
         }
 
         // Setup pan/drag functionality for zoomed images
@@ -3236,6 +3295,16 @@
                 tab.gridState = {};
             }
             tab.gridState.corners = tab._placedCorners;
+
+            // Store original image dimensions for zoom scaling
+            const imageDisplay = document.getElementById(`imageDisplay_${tabId}`);
+            const img = imageDisplay?.querySelector('img');
+            if (img) {
+                tab.gridState.originalImageWidth = img.clientWidth;
+                tab.gridState.originalImageHeight = img.clientHeight;
+                tab.gridState.lastScaleX = 1;
+                tab.gridState.lastScaleY = 1;
+            }
 
             // Remove instructions and temporary markers
             removeCornerPlacementInstructions(tabId);
