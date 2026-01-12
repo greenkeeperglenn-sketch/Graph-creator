@@ -995,6 +995,7 @@
         }
 
         .image-item {
+            position: relative;
             display: flex;
             align-items: center;
             gap: 12px;
@@ -1482,9 +1483,10 @@
                         for (const { relativePath, file } of imageFiles) {
                             const blob = await file.async('blob');
 
-                            // Extract ID from filename
-                            const parts = relativePath.split('_');
-                            const id = parseInt(parts[0]);
+                            // Extract ID from filename (keep as string for UUID support)
+                            const firstUnderscoreIndex = relativePath.indexOf('_');
+                            const id = relativePath.substring(0, firstUnderscoreIndex);
+                            const fileName = relativePath.substring(firstUnderscoreIndex + 1);
 
                             // Find metadata for this image
                             const meta = metadata.find(m => m.id === id) || {};
@@ -1492,7 +1494,7 @@
                             // Store in IndexedDB with full metadata
                             await imageDB.add({
                                 id: id,
-                                fileName: meta.fileName || parts.slice(1).join('_'),
+                                fileName: meta.fileName || fileName,
                                 imageData: blob,
                                 tabId: meta.tabId,
                                 date: meta.date,
@@ -2831,19 +2833,36 @@
 
         // Render image library
         async function renderImageLibrary(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
             const imageList = document.getElementById(`imageList_${tabId}`);
             const images = await imageDB.getAllByTab(tabId);
 
             if (images.length === 0) {
-                imageList.innerHTML = '<div style="text-align: center; color: rgba(255,255,255,0.3); padding: 20px; font-size: 0.9em;">No images uploaded</div>';
+                imageList.innerHTML = `
+                    <div style="padding: 12px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; margin-bottom: 12px;">
+                        <div style="font-size: 0.85em; color: #10b981; font-weight: 600;">📁 ${tab ? tab.name : 'Current Tab'}</div>
+                        <div style="font-size: 0.75em; color: rgba(255,255,255,0.5); margin-top: 4px;">Images uploaded here will be locked to this trial</div>
+                    </div>
+                    <div style="text-align: center; color: rgba(255,255,255,0.3); padding: 20px; font-size: 0.9em;">No images uploaded</div>
+                `;
                 return;
             }
 
             // Sort by date
             images.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-            imageList.innerHTML = images.map((img, index) => `
+            const tabIndicator = `
+                <div style="padding: 12px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; margin-bottom: 12px;">
+                    <div style="font-size: 0.85em; color: #10b981; font-weight: 600;">📁 ${tab ? tab.name : 'Current Tab'}</div>
+                    <div style="font-size: 0.75em; color: rgba(255,255,255,0.5); margin-top: 4px;">${images.length} image${images.length !== 1 ? 's' : ''} locked to this trial</div>
+                </div>
+            `;
+
+            const imageItems = images.map((img, index) => `
                 <div class="image-item ${index === 0 ? 'active' : ''}" data-image-id="${img.id}" onclick="selectImage('${tabId}', '${img.id}')">
+                    <div style="position: absolute; top: 4px; left: 4px; background: rgba(16, 185, 129, 0.9); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7em; font-weight: 600; z-index: 10;">
+                        ${tab ? tab.name : 'Tab'}
+                    </div>
                     <img src="${img.thumbnail}" class="image-thumbnail" alt="${img.fileName}">
                     <div class="image-info">
                         <div class="image-date">${formatDate(img.date)}</div>
@@ -2852,6 +2871,8 @@
                     <div class="image-remove" onclick="event.stopPropagation(); removeImage('${tabId}', '${img.id}')">×</div>
                 </div>
             `).join('');
+
+            imageList.innerHTML = tabIndicator + imageItems;
 
             // Auto-select first image
             if (images.length > 0) {
