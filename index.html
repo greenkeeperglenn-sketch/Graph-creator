@@ -1253,7 +1253,7 @@
 
     <div class="tab-bar">
         <div class="tabs-container" id="tabsContainer"></div>
-        <div class="tab-add" onclick="addNewTab()" title="Add new graph">+</div>
+        <div class="tab-add" onclick="showAddTabMenu(event)" title="Add new tab">+</div>
         <div class="tab-count" id="tabCount">0 graphs</div>
         <div class="project-buttons">
             <button class="project-btn save-btn" onclick="saveProject()" title="Save Project as ZIP with Images">💾 Save</button>
@@ -1647,26 +1647,108 @@
             
         }
 
-        function addNewTab() {
-            tabCounter++;
-            const tabId = 'tab_' + tabCounter;
-            const tabName = 'Graph ' + tabCounter;
+        // Show menu to choose tab type
+        function showAddTabMenu(event) {
+            // Remove any existing menu
+            const existingMenu = document.getElementById('addTabMenu');
+            if (existingMenu) existingMenu.remove();
 
-            const tab = {
-                id: tabId,
-                name: tabName,
-                data: null,
-                graphTitle: 'Trial Results',
-                yAxisLabel: 'Green Coverage (%)',
-                xAxisLabel: 'Assessment Date',
-                yAxisMin: 0,
-                yAxisMax: 100,
-                yAxisPercent: true,
-                treatments: [],
-                dates: [],
-                currentDateIndex: 0,
-                legendAscending: true
-            };
+            const menu = document.createElement('div');
+            menu.id = 'addTabMenu';
+            menu.style.cssText = `
+                position: fixed;
+                background: rgba(26, 26, 46, 0.98);
+                border: 1px solid rgba(16, 185, 129, 0.3);
+                border-radius: 8px;
+                padding: 8px;
+                z-index: 10000;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            `;
+
+            const buttonRect = event.target.getBoundingClientRect();
+            menu.style.left = buttonRect.left + 'px';
+            menu.style.top = (buttonRect.bottom + 5) + 'px';
+
+            menu.innerHTML = `
+                <button onclick="addNewTab('graph'); document.getElementById('addTabMenu').remove();" style="
+                    display: block;
+                    width: 100%;
+                    padding: 10px 16px;
+                    background: rgba(59, 130, 246, 0.1);
+                    border: 1px solid rgba(59, 130, 246, 0.3);
+                    border-radius: 6px;
+                    color: #3b82f6;
+                    font-weight: 600;
+                    cursor: pointer;
+                    margin-bottom: 6px;
+                    text-align: left;
+                ">📊 Graph Assessment</button>
+                <button onclick="addNewTab('fieldmap'); document.getElementById('addTabMenu').remove();" style="
+                    display: block;
+                    width: 100%;
+                    padding: 10px 16px;
+                    background: rgba(16, 185, 129, 0.1);
+                    border: 1px solid rgba(16, 185, 129, 0.3);
+                    border-radius: 6px;
+                    color: #10b981;
+                    font-weight: 600;
+                    cursor: pointer;
+                    text-align: left;
+                ">📷 Field Map</button>
+            `;
+
+            document.body.appendChild(menu);
+
+            // Close menu when clicking outside
+            setTimeout(() => {
+                document.addEventListener('click', function closeMenu(e) {
+                    if (!menu.contains(e.target) && e.target !== event.target) {
+                        menu.remove();
+                        document.removeEventListener('click', closeMenu);
+                    }
+                });
+            }, 100);
+        }
+
+        function addNewTab(type = 'graph') {
+            tabCounter++;
+            const tabId = (type === 'fieldmap' ? 'fieldmap_' : 'tab_') + tabCounter;
+
+            let tab;
+            if (type === 'fieldmap') {
+                tab = {
+                    id: tabId,
+                    type: 'fieldmap',
+                    name: 'Field Map',
+                    images: [],
+                    currentDateIndex: 0,
+                    gridSetup: {
+                        treatments: [],
+                        rows: 0,
+                        cols: 0,
+                        replicates: 4,
+                        cellTreatments: {},
+                        locked: false
+                    }
+                };
+            } else {
+                tab = {
+                    id: tabId,
+                    type: 'graph',
+                    name: 'Graph ' + tabCounter,
+                    data: null,
+                    graphTitle: 'Trial Results',
+                    yAxisLabel: 'Green Coverage (%)',
+                    xAxisLabel: 'Assessment Date',
+                    yAxisMin: 0,
+                    yAxisMax: 100,
+                    yAxisPercent: true,
+                    treatments: [],
+                    dates: [],
+                    currentDateIndex: 0,
+                    legendAscending: true
+                };
+            }
 
             tabs.push(tab);
             renderTabs();
