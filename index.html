@@ -1248,7 +1248,7 @@
             <p class="subtitle">STRI's Data Visualisation Tool</p>
         </div>
         <div class="header-title" id="projectTitle">Untitled Project</div>
-        <div class="version-indicator">v5.0 - ZIP + GRID</div>
+        <div class="version-indicator">v6.0 - FIELD MAPS</div>
     </div>
 
     <div class="tab-bar">
@@ -1317,31 +1317,51 @@
         // Auto-save to localStorage whenever tabs change
         function autoSave() {
             const project = {
-                version: 2,
+                version: 3,
                 savedAt: new Date().toISOString(),
                 projectName: projectName,
                 tabCounter: tabCounter,
                 activeTabId: activeTabId,
-                tabs: tabs.map(tab => ({
-                    id: tab.id,
-                    name: tab.name,
-                    graphTitle: tab.graphTitle,
-                    yAxisLabel: tab.yAxisLabel,
-                    xAxisLabel: tab.xAxisLabel,
-                    yAxisMin: tab.yAxisMin,
-                    yAxisMax: tab.yAxisMax,
-                    yAxisPercent: tab.yAxisPercent,
-                    treatments: tab.treatments,
-                    dates: tab.dates,
-                    rawData: document.getElementById('dataInput_' + tab.id)?.value || '',
-                    gridState: tab.gridState ? {
-                        corners: tab.gridState.corners,
-                        cols: tab.gridState.cols,
-                        rows: tab.gridState.rows,
-                        locked: tab.gridState.locked,
-                        cellTreatments: tab.gridState.cellTreatments
-                    } : null
-                }))
+                tabs: tabs.map(tab => {
+                    if (tab.type === 'fieldmap') {
+                        return {
+                            id: tab.id,
+                            type: 'fieldmap',
+                            name: tab.name,
+                            currentDateIndex: tab.currentDateIndex,
+                            gridSetup: tab.gridSetup,
+                            images: tab.images.map(img => ({
+                                id: img.id,
+                                fileName: img.fileName,
+                                date: img.date,
+                                corners: img.corners
+                                // Note: imageData (Blob) excluded from localStorage
+                            }))
+                        };
+                    } else {
+                        return {
+                            id: tab.id,
+                            type: 'graph',
+                            name: tab.name,
+                            graphTitle: tab.graphTitle,
+                            yAxisLabel: tab.yAxisLabel,
+                            xAxisLabel: tab.xAxisLabel,
+                            yAxisMin: tab.yAxisMin,
+                            yAxisMax: tab.yAxisMax,
+                            yAxisPercent: tab.yAxisPercent,
+                            treatments: tab.treatments,
+                            dates: tab.dates,
+                            rawData: document.getElementById('dataInput_' + tab.id)?.value || '',
+                            gridState: tab.gridState ? {
+                                corners: tab.gridState.corners,
+                                cols: tab.gridState.cols,
+                                rows: tab.gridState.rows,
+                                locked: tab.gridState.locked,
+                                cellTreatments: tab.gridState.cellTreatments
+                            } : null
+                        };
+                    }
+                })
             };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
         }
@@ -1351,30 +1371,49 @@
             showNotification('📦 Creating ZIP file with images...');
 
             const project = {
-                version: 2,
+                version: 3,
                 savedAt: new Date().toISOString(),
                 projectName: projectName,
                 tabCounter: tabCounter,
-                tabs: tabs.map(tab => ({
-                    id: tab.id,
-                    name: tab.name,
-                    graphTitle: tab.graphTitle,
-                    yAxisLabel: tab.yAxisLabel,
-                    xAxisLabel: tab.xAxisLabel,
-                    yAxisMin: tab.yAxisMin,
-                    yAxisMax: tab.yAxisMax,
-                    yAxisPercent: tab.yAxisPercent,
-                    treatments: tab.treatments,
-                    dates: tab.dates,
-                    rawData: document.getElementById('dataInput_' + tab.id)?.value || '',
-                    gridState: tab.gridState ? {
-                        corners: tab.gridState.corners,
-                        cols: tab.gridState.cols,
-                        rows: tab.gridState.rows,
-                        locked: tab.gridState.locked,
-                        cellTreatments: tab.gridState.cellTreatments
-                    } : null
-                }))
+                tabs: tabs.map(tab => {
+                    if (tab.type === 'fieldmap') {
+                        return {
+                            id: tab.id,
+                            type: 'fieldmap',
+                            name: tab.name,
+                            currentDateIndex: tab.currentDateIndex,
+                            gridSetup: tab.gridSetup,
+                            images: tab.images.map(img => ({
+                                id: img.id,
+                                fileName: img.fileName,
+                                date: img.date,
+                                corners: img.corners
+                            }))
+                        };
+                    } else {
+                        return {
+                            id: tab.id,
+                            type: 'graph',
+                            name: tab.name,
+                            graphTitle: tab.graphTitle,
+                            yAxisLabel: tab.yAxisLabel,
+                            xAxisLabel: tab.xAxisLabel,
+                            yAxisMin: tab.yAxisMin,
+                            yAxisMax: tab.yAxisMax,
+                            yAxisPercent: tab.yAxisPercent,
+                            treatments: tab.treatments,
+                            dates: tab.dates,
+                            rawData: document.getElementById('dataInput_' + tab.id)?.value || '',
+                            gridState: tab.gridState ? {
+                                corners: tab.gridState.corners,
+                                cols: tab.gridState.cols,
+                                rows: tab.gridState.rows,
+                                locked: tab.gridState.locked,
+                                cellTreatments: tab.gridState.cellTreatments
+                            } : null
+                        };
+                    }
+                })
             };
 
             // Create ZIP file
@@ -1383,7 +1422,20 @@
             // Add project JSON
             zip.file('project.json', JSON.stringify(project, null, 2));
 
-            // Add all images from IndexedDB with metadata
+            // Add images from Field Map tabs
+            let fieldMapImageCount = 0;
+            for (const tab of tabs) {
+                if (tab.type === 'fieldmap' && tab.images.length > 0) {
+                    const tabFolder = zip.folder(`fieldmap_images/${tab.id}`);
+                    for (const image of tab.images) {
+                        const fileName = `${image.id}_${image.fileName}`;
+                        tabFolder.file(fileName, image.imageData);
+                        fieldMapImageCount++;
+                    }
+                }
+            }
+
+            // Add all images from IndexedDB with metadata (for Graph tabs)
             const allImages = await imageDB.getAll();
             if (allImages.length > 0) {
                 const imagesFolder = zip.folder('images');
@@ -1407,7 +1459,9 @@
                 // Add metadata JSON
                 zip.file('images/metadata.json', JSON.stringify(imageMetadata, null, 2));
 
-                showNotification(`📸 Added ${allImages.length} images to ZIP`);
+                showNotification(`📸 Added ${allImages.length + fieldMapImageCount} images to ZIP`);
+            } else if (fieldMapImageCount > 0) {
+                showNotification(`📸 Added ${fieldMapImageCount} images to ZIP`);
             }
 
             // Generate ZIP blob
@@ -1455,7 +1509,28 @@
                     const projectText = await projectFile.async('text');
                     const project = JSON.parse(projectText);
 
-                    // Load images folder
+                    // Load Field Map images from fieldmap_images folders
+                    let fieldMapImageCount = 0;
+                    for (const savedTab of project.tabs) {
+                        if (savedTab.type === 'fieldmap' && savedTab.images.length > 0) {
+                            const tabFolder = zip.folder(`fieldmap_images/${savedTab.id}`);
+                            if (tabFolder) {
+                                // Load images for this Field Map tab
+                                for (const imageMetadata of savedTab.images) {
+                                    const imageFileName = `${imageMetadata.id}_${imageMetadata.fileName}`;
+                                    const imageFile = zip.file(`fieldmap_images/${savedTab.id}/${imageFileName}`);
+                                    if (imageFile) {
+                                        const blob = await imageFile.async('blob');
+                                        // Store the blob in the image metadata
+                                        imageMetadata.imageData = blob;
+                                        fieldMapImageCount++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Load images folder (for Graph tabs)
                     const imagesFolder = zip.folder('images');
                     if (imagesFolder) {
                         // Load metadata first
@@ -1474,7 +1549,9 @@
                             }
                         });
 
-                        showNotification(`📸 Loading ${imageFiles.length} images...`);
+                        if (imageFiles.length > 0) {
+                            showNotification(`📸 Loading ${imageFiles.length + fieldMapImageCount} images...`);
+                        }
 
                         // Clear existing images from IndexedDB
                         await imageDB.clear();
@@ -1503,7 +1580,9 @@
                             });
                         }
 
-                        showNotification(`✅ Loaded ${imageFiles.length} images`);
+                        showNotification(`✅ Loaded ${imageFiles.length + fieldMapImageCount} images`);
+                    } else if (fieldMapImageCount > 0) {
+                        showNotification(`✅ Loaded ${fieldMapImageCount} images`);
                     }
 
                     // Load project data
@@ -1512,10 +1591,20 @@
                     document.getElementById('projectTitle').textContent = projectName;
                     autoSave();
 
-                    // Refresh image libraries for all tabs
+                    // Refresh image libraries and Field Map images for all tabs
                     setTimeout(async () => {
                         for (const tab of tabs) {
-                            await renderImageLibrary(tab.id);
+                            if (tab.type === 'fieldmap') {
+                                // Render Field Map images
+                                if (tab.images.length > 0) {
+                                    const timeline = document.getElementById(`timeline_${tab.id}`);
+                                    if (timeline) timeline.style.display = 'flex';
+                                    renderFieldMapImage(tab.id);
+                                }
+                            } else {
+                                // Render Graph tab image library
+                                await renderImageLibrary(tab.id);
+                            }
                         }
                         showNotification('✅ Project and images loaded from ZIP!');
                     }, 200);
@@ -1561,75 +1650,101 @@
             tabCounter = project.tabCounter || 0;
             
             project.tabs.forEach(savedTab => {
-                const tab = {
-                    id: savedTab.id,
-                    name: savedTab.name,
-                    graphTitle: savedTab.graphTitle || 'Trial Results',
-                    yAxisLabel: savedTab.yAxisLabel || 'Green Coverage (%)',
-                    xAxisLabel: savedTab.xAxisLabel || 'Assessment Date',
-                    yAxisMin: savedTab.yAxisMin ?? 0,
-                    yAxisMax: savedTab.yAxisMax ?? 100,
-                    yAxisPercent: savedTab.yAxisPercent ?? true,
-                    treatments: savedTab.treatments || [],
-                    dates: savedTab.dates || [],
-                    currentDateIndex: 0,
-                    legendAscending: true,
-                    gridState: savedTab.gridState || null,
-                    _gridCreated: savedTab.gridState ? true : false
-                };
+                let tab;
+
+                if (savedTab.type === 'fieldmap') {
+                    // Restore Field Map tab
+                    tab = {
+                        id: savedTab.id,
+                        type: 'fieldmap',
+                        name: savedTab.name,
+                        images: savedTab.images || [],
+                        currentDateIndex: savedTab.currentDateIndex || 0,
+                        gridSetup: savedTab.gridSetup || {
+                            treatments: [],
+                            rows: 0,
+                            cols: 0,
+                            replicates: 4,
+                            cellTreatments: {},
+                            locked: false
+                        }
+                    };
+                } else {
+                    // Restore Graph tab (default)
+                    tab = {
+                        id: savedTab.id,
+                        type: 'graph',
+                        name: savedTab.name,
+                        graphTitle: savedTab.graphTitle || 'Trial Results',
+                        yAxisLabel: savedTab.yAxisLabel || 'Green Coverage (%)',
+                        xAxisLabel: savedTab.xAxisLabel || 'Assessment Date',
+                        yAxisMin: savedTab.yAxisMin ?? 0,
+                        yAxisMax: savedTab.yAxisMax ?? 100,
+                        yAxisPercent: savedTab.yAxisPercent ?? true,
+                        treatments: savedTab.treatments || [],
+                        dates: savedTab.dates || [],
+                        currentDateIndex: 0,
+                        legendAscending: true,
+                        gridState: savedTab.gridState || null,
+                        _gridCreated: savedTab.gridState ? true : false
+                    };
+                }
 
                 tabs.push(tab);
                 createTabContent(tab);
-                
-                // Restore raw data to textarea
-                if (savedTab.rawData) {
-                    document.getElementById('dataInput_' + tab.id).value = savedTab.rawData;
-                }
-                
-                // Restore form values
-                document.getElementById('graphTitle_' + tab.id).value = tab.graphTitle;
-                document.getElementById('yAxisLabel_' + tab.id).value = tab.yAxisLabel;
-                document.getElementById('xAxisLabel_' + tab.id).value = tab.xAxisLabel;
-                document.getElementById('yAxisMin_' + tab.id).value = tab.yAxisMin;
-                document.getElementById('yAxisMax_' + tab.id).value = tab.yAxisMax;
-                const percentBtn = document.getElementById('yAxisPercent_' + tab.id);
-                if (tab.yAxisPercent) {
-                    percentBtn.classList.add('active');
-                } else {
-                    percentBtn.classList.remove('active');
-                }
-                
-                // Recreate graph if there's data
-                if (tab.treatments.length > 0 && tab.dates.length > 0) {
-                    createGraph(tab.id);
-                    updateLegend(tab.id, 0);
-                    updateNavigation(tab.id);
-                    addTimelineLine(tab.id, 0);
-                }
 
-                // Restore grid if it exists
-                if (tab.gridState && tab.gridState.corners && tab.gridState.corners.length === 4) {
-                    // Wait for DOM to be ready, then render the grid
-                    setTimeout(() => {
-                        const gridOverlay = document.getElementById(`gridOverlay_${tab.id}`);
-                        if (gridOverlay) {
-                            gridOverlay.style.display = 'block';
-                            renderGrid(tab.id);
+                // Only restore graph-specific elements for graph tabs
+                if (tab.type !== 'fieldmap') {
+                    // Restore raw data to textarea
+                    if (savedTab.rawData) {
+                        document.getElementById('dataInput_' + tab.id).value = savedTab.rawData;
+                    }
 
-                            // Update lock button state
-                            const lockGridBtn = document.getElementById(`lockGrid_${tab.id}`);
-                            if (lockGridBtn && tab.gridState.locked) {
-                                lockGridBtn.textContent = '🔓 Unlock Grid';
-                                lockGridBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                    // Restore form values
+                    document.getElementById('graphTitle_' + tab.id).value = tab.graphTitle;
+                    document.getElementById('yAxisLabel_' + tab.id).value = tab.yAxisLabel;
+                    document.getElementById('xAxisLabel_' + tab.id).value = tab.xAxisLabel;
+                    document.getElementById('yAxisMin_' + tab.id).value = tab.yAxisMin;
+                    document.getElementById('yAxisMax_' + tab.id).value = tab.yAxisMax;
+                    const percentBtn = document.getElementById('yAxisPercent_' + tab.id);
+                    if (tab.yAxisPercent) {
+                        percentBtn.classList.add('active');
+                    } else {
+                        percentBtn.classList.remove('active');
+                    }
+
+                    // Recreate graph if there's data
+                    if (tab.treatments.length > 0 && tab.dates.length > 0) {
+                        createGraph(tab.id);
+                        updateLegend(tab.id, 0);
+                        updateNavigation(tab.id);
+                        addTimelineLine(tab.id, 0);
+                    }
+
+                    // Restore grid if it exists
+                    if (tab.gridState && tab.gridState.corners && tab.gridState.corners.length === 4) {
+                        // Wait for DOM to be ready, then render the grid
+                        setTimeout(() => {
+                            const gridOverlay = document.getElementById(`gridOverlay_${tab.id}`);
+                            if (gridOverlay) {
+                                gridOverlay.style.display = 'block';
+                                renderGrid(tab.id);
+
+                                // Update lock button state
+                                const lockGridBtn = document.getElementById(`lockGrid_${tab.id}`);
+                                if (lockGridBtn && tab.gridState.locked) {
+                                    lockGridBtn.textContent = '🔓 Unlock Grid';
+                                    lockGridBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                                }
+
+                                // Show breakdown button if locked and has assignments
+                                const viewBreakdownBtn = document.getElementById(`viewBreakdown_${tab.id}`);
+                                if (viewBreakdownBtn && tab.gridState.locked && tab.gridState.cellTreatments && Object.keys(tab.gridState.cellTreatments).length > 0) {
+                                    viewBreakdownBtn.style.display = 'block';
+                                }
                             }
-
-                            // Show breakdown button if locked and has assignments
-                            const viewBreakdownBtn = document.getElementById(`viewBreakdown_${tab.id}`);
-                            if (viewBreakdownBtn && tab.gridState.locked && tab.gridState.cellTreatments && Object.keys(tab.gridState.cellTreatments).length > 0) {
-                                viewBreakdownBtn.style.display = 'block';
-                            }
-                        }
-                    }, 100);
+                        }, 100);
+                    }
                 }
             });
             
@@ -1773,8 +1888,22 @@
             const content = document.createElement('div');
             content.id = 'content_' + tab.id;
             content.className = 'tab-content';
+
+            // Check tab type and render appropriate content
+            if (tab.type === 'fieldmap') {
+                content.innerHTML = createFieldMapContent(tab);
+            } else {
+                content.innerHTML = createGraphContent(tab);
+            }
+
+            container.appendChild(content);
+            setupTabListeners(tab);
+        }
+
+        // Create content for Graph Assessment tabs
+        function createGraphContent(tab) {
             const collapsedClass = inputPanelsCollapsed ? ' collapsed' : '';
-            content.innerHTML = `
+            return `
                 <div class="main-content">
                     <div class="input-panel${collapsedClass}">
                         <div class="input-header">
@@ -2030,10 +2159,491 @@
                     </div>
                 </div>
             `;
-            container.appendChild(content);
-            setupDivider(tab.id);
-            setupInputListeners(tab.id);
-            setupFieldMapListeners(tab.id);
+        }
+
+        // Create content for Field Map tabs
+        function createFieldMapContent(tab) {
+            return `
+                <div class="main-content" style="display: flex; flex-direction: column; height: 100%;">
+                    <!-- Timeline Navigation -->
+                    <div style="padding: 16px; background: rgba(26, 26, 46, 0.8); border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                            <h2 style="margin: 0; color: #10b981;">📷 Field Map</h2>
+                            <div style="display: flex; gap: 8px;">
+                                <button onclick="uploadFieldMapImages('${tab.id}')" style="
+                                    padding: 8px 16px;
+                                    background: linear-gradient(135deg, #10b981, #059669);
+                                    border: none;
+                                    border-radius: 6px;
+                                    color: white;
+                                    font-weight: 600;
+                                    cursor: pointer;
+                                ">📁 Upload Images</button>
+                            </div>
+                        </div>
+
+                        <!-- Image Timeline -->
+                        <div id="timeline_${tab.id}" style="display: none;">
+                            <div style="display: flex; align-items: center; gap: 12px; justify-content: center;">
+                                <button onclick="navigateImage('${tab.id}', -1)" style="
+                                    padding: 8px 16px;
+                                    background: rgba(255,255,255,0.1);
+                                    border: 1px solid rgba(255,255,255,0.2);
+                                    border-radius: 6px;
+                                    color: white;
+                                    cursor: pointer;
+                                ">◀ Previous</button>
+
+                                <div style="text-align: center;">
+                                    <div id="currentDate_${tab.id}" style="font-size: 1.2em; font-weight: 600; color: #10b981;"></div>
+                                    <div id="imageCounter_${tab.id}" style="font-size: 0.85em; color: rgba(255,255,255,0.5);"></div>
+                                </div>
+
+                                <button onclick="navigateImage('${tab.id}', 1)" style="
+                                    padding: 8px 16px;
+                                    background: rgba(255,255,255,0.1);
+                                    border: 1px solid rgba(255,255,255,0.2);
+                                    border-radius: 6px;
+                                    color: white;
+                                    cursor: pointer;
+                                ">Next ▶</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Main View -->
+                    <div style="display: flex; flex: 1; min-height: 0;">
+                        <!-- Image Display -->
+                        <div style="flex: 3; display: flex; flex-direction: column; position: relative; background: #1a1a2e;">
+                            <div class="image-display" id="fieldMapImageDisplay_${tab.id}" style="flex: 1; position: relative; display: flex; align-items: center; justify-content: center;">
+                                <div style="text-align: center; color: rgba(255,255,255,0.3);">
+                                    <div style="font-size: 3em; margin-bottom: 12px;">📷</div>
+                                    <div>Upload images to get started</div>
+                                </div>
+                            </div>
+
+                            <!-- SVG Grid Overlay -->
+                            <svg id="gridOverlay_${tab.id}" style="display: none; position: absolute; top: 0; left: 0; pointer-events: none; z-index: 5;">
+                                <g id="gridGroup_${tab.id}" style="pointer-events: all;"></g>
+                            </svg>
+                        </div>
+
+                        <!-- Right Panel: Grid Setup -->
+                        <div style="flex: 1; background: rgba(26, 26, 46, 0.8); border-left: 1px solid rgba(255,255,255,0.1); overflow-y: auto; padding: 20px;">
+                            <h3 style="color: #10b981; margin-bottom: 16px;">⚙️ Grid Setup</h3>
+
+                            <!-- Pull from Graph -->
+                            <div style="margin-bottom: 20px;">
+                                <label style="display: block; margin-bottom: 8px; font-size: 0.9em; color: rgba(255,255,255,0.7);">Pull treatments from:</label>
+                                <select id="sourceGraph_${tab.id}" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: white; margin-bottom: 8px;">
+                                    <option value="">Select a graph...</option>
+                                </select>
+                                <button onclick="pullTreatmentsFromGraph('${tab.id}')" style="
+                                    width: 100%;
+                                    padding: 8px;
+                                    background: rgba(59, 130, 246, 0.2);
+                                    border: 1px solid rgba(59, 130, 246, 0.3);
+                                    border-radius: 6px;
+                                    color: #3b82f6;
+                                    cursor: pointer;
+                                    font-weight: 600;
+                                ">↓ Pull Treatments</button>
+                            </div>
+
+                            <!-- Treatment List -->
+                            <div id="treatmentList_${tab.id}" style="margin-bottom: 20px;"></div>
+
+                            <!-- Grid Config -->
+                            <div style="margin-bottom: 16px;">
+                                <label>Rows</label>
+                                <input type="number" id="gridRows_${tab.id}" value="4" min="1" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: white;">
+                            </div>
+
+                            <div style="margin-bottom: 16px;">
+                                <label>Columns</label>
+                                <input type="number" id="gridCols_${tab.id}" value="4" min="1" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: white;">
+                            </div>
+
+                            <div style="margin-bottom: 16px;">
+                                <label>Replicates per Treatment</label>
+                                <input type="number" id="replicates_${tab.id}" value="4" min="1" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: white;">
+                            </div>
+
+                            <!-- Corner Placement -->
+                            <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,0.1);">
+                                <h4 style="color: #10b981; margin-bottom: 12px;">📍 Corner Placement</h4>
+                                <button id="placeCorners_${tab.id}" onclick="startCornerPlacement('${tab.id}')" style="
+                                    width: 100%;
+                                    padding: 10px;
+                                    background: linear-gradient(135deg, #10b981, #059669);
+                                    border: none;
+                                    border-radius: 6px;
+                                    color: white;
+                                    font-weight: 600;
+                                    cursor: pointer;
+                                    margin-bottom: 8px;
+                                ">📍 Place 4 Corners</button>
+
+                                <button id="lockGrid_${tab.id}" onclick="lockFieldMapGrid('${tab.id}')" style="display: none; width: 100%; padding: 10px; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; border-radius: 6px; color: white; font-weight: 600; cursor: pointer; margin-bottom: 8px;">
+                                    🔒 Lock Grid
+                                </button>
+
+                                <button id="viewBreakdown_${tab.id}" onclick="viewBreakdown('${tab.id}')" style="display: none; width: 100%; padding: 10px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); border: none; border-radius: 6px; color: white; font-weight: 600; cursor: pointer;">
+                                    👁️ View Breakdown
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function setupTabListeners(tab) {
+            if (tab.type === 'fieldmap') {
+                // Field map specific setup
+                populateSourceGraphDropdown(tab.id);
+            } else {
+                // Graph specific setup
+                setupDivider(tab.id);
+                setupInputListeners(tab.id);
+                setupFieldMapListeners(tab.id);
+            }
+        }
+
+        // Field Map Functions
+        function uploadFieldMapImages(tabId) {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.multiple = true;
+            input.onchange = async (e) => {
+                const files = Array.from(e.target.files);
+                const tab = tabs.find(t => t.id === tabId);
+                if (!tab) return;
+
+                showNotification(`📸 Uploading ${files.length} images...`);
+
+                for (const file of files) {
+                    // Extract EXIF data
+                    const exifData = await extractEXIF(file);
+                    const imageDate = exifData.dateTaken;
+
+                    // Generate thumbnail
+                    const thumbnail = await generateThumbnail(file, 200);
+
+                    // Create image record
+                    const imageRecord = {
+                        id: generateUUID(),
+                        fileName: file.name,
+                        date: imageDate.toISOString().split('T')[0],
+                        imageData: file,
+                        thumbnail: thumbnail,
+                        uploadedAt: new Date().toISOString(),
+                        exifData: {
+                            dateTaken: imageDate.toISOString(),
+                            camera: exifData.model,
+                            gps: exifData.gps,
+                            dimensions: {
+                                width: exifData.width,
+                                height: exifData.height
+                            }
+                        },
+                        corners: null  // Will be set per-image
+                    };
+
+                    // Add to tab's images array
+                    tab.images.push(imageRecord);
+                }
+
+                // Sort images by date
+                tab.images.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+                // Show timeline
+                document.getElementById(`timeline_${tabId}`).style.display = 'block';
+
+                // Display first image
+                tab.currentDateIndex = 0;
+                await renderFieldMapImage(tabId);
+
+                showNotification(`✅ Uploaded ${files.length} images`);
+                autoSave();
+            };
+            input.click();
+        }
+
+        async function renderFieldMapImage(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab || tab.images.length === 0) return;
+
+            const currentImage = tab.images[tab.currentDateIndex];
+            const imageDisplay = document.getElementById(`fieldMapImageDisplay_${tabId}`);
+
+            // Create URL for image
+            const imageURL = URL.createObjectURL(currentImage.imageData);
+
+            // Display image
+            imageDisplay.innerHTML = `<img src="${imageURL}" alt="${currentImage.fileName}" style="max-width: 90%; max-height: 90%; object-fit: contain;">`;
+
+            // Update timeline display
+            document.getElementById(`currentDate_${tabId}`).textContent = formatDate(currentImage.date);
+            document.getElementById(`imageCounter_${tabId}`).textContent = `Image ${tab.currentDateIndex + 1} of ${tab.images.length}`;
+
+            // Setup grid for this image
+            const img = imageDisplay.querySelector('img');
+            if (img) {
+                img.style.cursor = 'crosshair';
+
+                // If this image has corners saved, render the grid
+                if (currentImage.corners && currentImage.corners.length === 4) {
+                    setTimeout(() => {
+                        renderFieldMapGrid(tabId);
+                    }, 100);
+                }
+            }
+        }
+
+        function navigateImage(tabId, direction) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab || tab.images.length === 0) return;
+
+            tab.currentDateIndex += direction;
+
+            // Wrap around
+            if (tab.currentDateIndex < 0) {
+                tab.currentDateIndex = tab.images.length - 1;
+            } else if (tab.currentDateIndex >= tab.images.length) {
+                tab.currentDateIndex = 0;
+            }
+
+            renderFieldMapImage(tabId);
+            autoSave();
+        }
+
+        function startCornerPlacement(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab || tab.images.length === 0) {
+                showNotification('⚠️ Upload images first');
+                return;
+            }
+
+            const currentImage = tab.images[tab.currentDateIndex];
+
+            // Initialize corner placement mode
+            tab._cornerPlacementMode = true;
+            tab._placedCorners = [];
+
+            showNotification('📍 Click 4 corners: Top-Left, Top-Right, Bottom-Right, Bottom-Left');
+
+            const imageDisplay = document.getElementById(`fieldMapImageDisplay_${tabId}`);
+            const img = imageDisplay.querySelector('img');
+            if (!img) return;
+
+            // Setup click listener
+            const handleClick = (e) => {
+                if (!tab._cornerPlacementMode) return;
+
+                const bounds = getRenderedImageBounds(img);
+                const rect = imageDisplay.getBoundingClientRect();
+                const clickX = e.clientX - rect.left - bounds.offsetX;
+                const clickY = e.clientY - rect.top - bounds.offsetY;
+
+                // Only register clicks within image bounds
+                if (clickX >= 0 && clickX <= bounds.width && clickY >= 0 && clickY <= bounds.height) {
+                    tab._placedCorners.push({ x: clickX, y: clickY });
+
+                    // Show visual indicator
+                    const indicator = document.createElement('div');
+                    indicator.style.cssText = `
+                        position: absolute;
+                        left: ${e.clientX - rect.left}px;
+                        top: ${e.clientY - rect.top}px;
+                        width: 12px;
+                        height: 12px;
+                        background: #10b981;
+                        border: 2px solid white;
+                        border-radius: 50%;
+                        transform: translate(-50%, -50%);
+                        z-index: 100;
+                    `;
+                    imageDisplay.appendChild(indicator);
+
+                    if (tab._placedCorners.length === 4) {
+                        // Save corners to current image
+                        currentImage.corners = tab._placedCorners;
+                        tab._cornerPlacementMode = false;
+
+                        // Show lock button
+                        document.getElementById(`lockGrid_${tabId}`).style.display = 'block';
+
+                        // Render grid
+                        renderFieldMapGrid(tabId);
+
+                        showNotification('✓ Corners placed! Adjust if needed, then lock grid');
+                        imageDisplay.removeEventListener('click', handleClick);
+                    } else {
+                        showNotification(`📍 Corner ${tab._placedCorners.length}/4 placed`);
+                    }
+                }
+            };
+
+            imageDisplay.addEventListener('click', handleClick);
+        }
+
+        function renderFieldMapGrid(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab || tab.images.length === 0) return;
+
+            const currentImage = tab.images[tab.currentDateIndex];
+            if (!currentImage.corners || currentImage.corners.length !== 4) return;
+
+            const imageDisplay = document.getElementById(`fieldMapImageDisplay_${tabId}`);
+            const img = imageDisplay.querySelector('img');
+            if (!img) return;
+
+            const bounds = getRenderedImageBounds(img);
+            const gridOverlay = document.getElementById(`gridOverlay_${tabId}`);
+            const gridContainer = document.getElementById(`gridGroup_${tabId}`);
+
+            // Set overlay size and position
+            gridOverlay.setAttribute('width', bounds.width);
+            gridOverlay.setAttribute('height', bounds.height);
+            gridOverlay.style.width = bounds.width + 'px';
+            gridOverlay.style.height = bounds.height + 'px';
+            gridOverlay.style.left = bounds.offsetX + 'px';
+            gridOverlay.style.top = bounds.offsetY + 'px';
+            gridOverlay.style.display = 'block';
+
+            // Clear existing grid
+            gridContainer.innerHTML = '';
+
+            // Get grid configuration
+            const rows = parseInt(document.getElementById(`gridRows_${tabId}`).value) || 4;
+            const cols = parseInt(document.getElementById(`gridCols_${tabId}`).value) || 4;
+
+            // Draw grid using bilinear interpolation
+            const corners = currentImage.corners;
+            const [tl, tr, br, bl] = corners;
+
+            const interpolate = (u, v) => {
+                const top_x = tl.x + u * (tr.x - tl.x);
+                const top_y = tl.y + u * (tr.y - tl.y);
+                const bottom_x = bl.x + u * (br.x - bl.x);
+                const bottom_y = bl.y + u * (br.y - bl.y);
+                return {
+                    x: top_x + v * (bottom_x - top_x),
+                    y: top_y + v * (bottom_y - top_y)
+                };
+            };
+
+            // Draw grid cells
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    const u1 = col / cols;
+                    const u2 = (col + 1) / cols;
+                    const v1 = row / rows;
+                    const v2 = (row + 1) / rows;
+
+                    const p1 = interpolate(u1, v1);
+                    const p2 = interpolate(u2, v1);
+                    const p3 = interpolate(u2, v2);
+                    const p4 = interpolate(u1, v2);
+
+                    const cell = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                    cell.setAttribute('points', `${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y} ${p4.x},${p4.y}`);
+                    cell.setAttribute('fill', 'transparent');
+                    cell.setAttribute('stroke', '#10b981');
+                    cell.setAttribute('stroke-width', '2');
+                    cell.setAttribute('fill-opacity', '0.3');
+
+                    const cellKey = `${row}_${col}`;
+
+                    // Check if cell has treatment assigned
+                    if (tab.gridSetup.cellTreatments[cellKey]) {
+                        const treatment = tab.gridSetup.cellTreatments[cellKey];
+                        cell.setAttribute('fill', treatment.color);
+                        cell.setAttribute('fill-opacity', '0.3');
+                    }
+
+                    // Add drop zone for treatments
+                    if (tab.gridSetup.locked) {
+                        cell.addEventListener('dragover', (e) => {
+                            e.preventDefault();
+                            cell.setAttribute('fill-opacity', '0.5');
+                        });
+
+                        cell.addEventListener('dragleave', () => {
+                            if (tab.gridSetup.cellTreatments[cellKey]) {
+                                cell.setAttribute('fill-opacity', '0.3');
+                            } else {
+                                cell.setAttribute('fill', 'transparent');
+                            }
+                        });
+
+                        cell.addEventListener('drop', (e) => {
+                            e.preventDefault();
+                            const treatmentName = e.dataTransfer.getData('treatment');
+                            const color = e.dataTransfer.getData('color');
+
+                            if (treatmentName && color) {
+                                tab.gridSetup.cellTreatments[cellKey] = { name: treatmentName, color: color };
+                                cell.setAttribute('fill', color);
+                                cell.setAttribute('fill-opacity', '0.3');
+                                showNotification(`✓ ${treatmentName} assigned to cell (${row + 1}, ${col + 1})`);
+
+                                // Update treatment counter
+                                updateTreatmentCounters(tabId);
+
+                                // Show breakdown button
+                                const viewBreakdownBtn = document.getElementById(`viewBreakdown_${tabId}`);
+                                if (viewBreakdownBtn && Object.keys(tab.gridSetup.cellTreatments).length > 0) {
+                                    viewBreakdownBtn.style.display = 'block';
+                                }
+
+                                autoSave();
+                            }
+                        });
+                    }
+
+                    gridContainer.appendChild(cell);
+
+                    // Add treatment label if assigned
+                    if (tab.gridSetup.cellTreatments[cellKey]) {
+                        const center = interpolate(u1 + 0.5 / cols, v1 + 0.5 / rows);
+                        const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                        label.setAttribute('x', center.x);
+                        label.setAttribute('y', center.y);
+                        label.setAttribute('text-anchor', 'middle');
+                        label.setAttribute('dominant-baseline', 'middle');
+                        label.setAttribute('fill', 'white');
+                        label.setAttribute('font-size', '10');
+                        label.setAttribute('font-weight', 'bold');
+                        label.setAttribute('pointer-events', 'none');
+                        label.textContent = tab.gridSetup.cellTreatments[cellKey].name;
+                        gridContainer.appendChild(label);
+                    }
+                }
+            }
+        }
+
+        function lockFieldMapGrid(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab) return;
+
+            tab.gridSetup.locked = !tab.gridSetup.locked;
+
+            const lockBtn = document.getElementById(`lockGrid_${tabId}`);
+            if (tab.gridSetup.locked) {
+                lockBtn.textContent = '🔓 Unlock Grid';
+                lockBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                showNotification('🔒 Grid locked - drag treatments onto cells');
+            } else {
+                lockBtn.textContent = '🔒 Lock Grid';
+                lockBtn.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+                showNotification('🔓 Grid unlocked');
+            }
+
+            renderFieldMapGrid(tabId);
+            autoSave();
         }
 
         function setupInputListeners(tabId) {
@@ -3061,10 +3671,17 @@
                 return;
             }
 
+            // Get treatments from correct location based on tab type
+            const treatments = tab.type === 'fieldmap' ? tab.gridSetup.treatments : tab.treatments;
+            if (!treatments || treatments.length === 0) {
+                console.log('No treatments found in tab');
+                return;
+            }
+
             const replicates = parseInt(document.getElementById(`replicates_${tabId}`)?.value) || 4;
             console.log('Replicates:', replicates);
 
-            treatmentList.innerHTML = tab.treatments.map((treatment, index) => {
+            treatmentList.innerHTML = treatments.map((treatment, index) => {
                 const color = colors[index % colors.length];
                 return `
                     <div class="treatment-item">
@@ -3352,19 +3969,31 @@
         // Update treatment counters to show remaining assignments
         function updateTreatmentCounters(tabId) {
             const tab = tabs.find(t => t.id === tabId);
-            if (!tab || !tab.treatments || !tab.gridState) return;
+            if (!tab) return;
+
+            // Get treatments and cellTreatments based on tab type
+            let treatments, cellTreatments;
+            if (tab.type === 'fieldmap') {
+                treatments = tab.gridSetup?.treatments;
+                cellTreatments = tab.gridSetup?.cellTreatments;
+                if (!treatments) return;
+            } else {
+                treatments = tab.treatments;
+                cellTreatments = tab.gridState?.cellTreatments;
+                if (!treatments || !tab.gridState) return;
+            }
 
             const replicates = parseInt(document.getElementById(`replicates_${tabId}`)?.value) || 4;
 
             // Count how many times each treatment has been assigned
             const assignmentCounts = {};
-            tab.treatments.forEach(treatment => {
+            treatments.forEach(treatment => {
                 assignmentCounts[treatment.name] = 0;
             });
 
             // Count assignments in cellTreatments
-            if (tab.gridState.cellTreatments) {
-                Object.values(tab.gridState.cellTreatments).forEach(cell => {
+            if (cellTreatments) {
+                Object.values(cellTreatments).forEach(cell => {
                     if (assignmentCounts.hasOwnProperty(cell.name)) {
                         assignmentCounts[cell.name]++;
                     }
@@ -3375,7 +4004,7 @@
             const treatmentList = document.getElementById(`treatmentList_${tabId}`);
             if (!treatmentList) return;
 
-            tab.treatments.forEach((treatment, index) => {
+            treatments.forEach((treatment, index) => {
                 const assigned = assignmentCounts[treatment.name] || 0;
                 const remaining = replicates - assigned;
 
@@ -3416,9 +4045,9 @@
             // Clear existing options except the first one
             dropdown.innerHTML = '<option value="">Select a graph...</option>';
 
-            // Add all tabs that have treatments (excluding current tab)
+            // Add all Graph tabs that have treatments (excluding current tab and Field Maps)
             tabs.forEach(tab => {
-                if (tab.id !== tabId && tab.treatments && tab.treatments.length > 0) {
+                if (tab.id !== tabId && tab.type !== 'fieldmap' && tab.treatments && tab.treatments.length > 0) {
                     const option = document.createElement('option');
                     option.value = tab.id;
                     option.textContent = `${tab.name} (${tab.treatments.length} treatments)`;
@@ -3451,12 +4080,19 @@
             }
 
             // Copy treatments to target tab
-            targetTab.treatments = JSON.parse(JSON.stringify(sourceTab.treatments));
+            if (targetTab.type === 'fieldmap') {
+                // For Field Map tabs, store in gridSetup
+                targetTab.gridSetup.treatments = JSON.parse(JSON.stringify(sourceTab.treatments));
+                showNotification(`✓ Pulled ${sourceTab.treatments.length} treatments to Field Map`);
+            } else {
+                // For Graph tabs, store in treatments
+                targetTab.treatments = JSON.parse(JSON.stringify(sourceTab.treatments));
+                // Sync to field map (old architecture)
+                syncFieldMapTreatments(targetTabId);
+                showNotification(`✓ Pulled ${sourceTab.treatments.length} treatments from "${sourceTab.name}"`);
+            }
 
-            // Sync to field map
-            syncFieldMapTreatments(targetTabId);
-
-            showNotification(`✓ Pulled ${sourceTab.treatments.length} treatments from "${sourceTab.name}"`);
+            autoSave();
         }
 
         // =====================================
