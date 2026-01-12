@@ -1382,14 +1382,30 @@
             // Add project JSON
             zip.file('project.json', JSON.stringify(project, null, 2));
 
-            // Add all images from IndexedDB
+            // Add all images from IndexedDB with metadata
             const allImages = await imageDB.getAll();
             if (allImages.length > 0) {
                 const imagesFolder = zip.folder('images');
+                const imageMetadata = [];
+
                 for (const image of allImages) {
                     const fileName = `${image.id}_${image.fileName}`;
                     imagesFolder.file(fileName, image.imageData);
+
+                    // Store metadata separately
+                    imageMetadata.push({
+                        id: image.id,
+                        fileName: image.fileName,
+                        tabId: image.tabId,
+                        date: image.date,
+                        uploadedAt: image.uploadedAt,
+                        exifData: image.exifData
+                    });
                 }
+
+                // Add metadata JSON
+                zip.file('images/metadata.json', JSON.stringify(imageMetadata, null, 2));
+
                 showNotification(`📸 Added ${allImages.length} images to ZIP`);
             }
 
@@ -1441,9 +1457,20 @@
                     // Load images folder
                     const imagesFolder = zip.folder('images');
                     if (imagesFolder) {
+                        // Load metadata first
+                        const metadataFile = zip.file('images/metadata.json');
+                        let metadata = [];
+                        if (metadataFile) {
+                            const metadataText = await metadataFile.async('text');
+                            metadata = JSON.parse(metadataText);
+                        }
+
                         const imageFiles = [];
                         imagesFolder.forEach((relativePath, file) => {
-                            imageFiles.push({ relativePath, file });
+                            // Skip metadata.json
+                            if (relativePath !== 'metadata.json') {
+                                imageFiles.push({ relativePath, file });
+                            }
                         });
 
                         showNotification(`📸 Loading ${imageFiles.length} images...`);
@@ -1455,17 +1482,22 @@
                         for (const { relativePath, file } of imageFiles) {
                             const blob = await file.async('blob');
 
-                            // Extract original filename and ID
+                            // Extract ID from filename
                             const parts = relativePath.split('_');
                             const id = parseInt(parts[0]);
-                            const originalFileName = parts.slice(1).join('_');
 
-                            // Store in IndexedDB
+                            // Find metadata for this image
+                            const meta = metadata.find(m => m.id === id) || {};
+
+                            // Store in IndexedDB with full metadata
                             await imageDB.add({
                                 id: id,
-                                fileName: originalFileName,
+                                fileName: meta.fileName || parts.slice(1).join('_'),
                                 imageData: blob,
-                                uploadedAt: new Date().toISOString()
+                                tabId: meta.tabId,
+                                date: meta.date,
+                                uploadedAt: meta.uploadedAt || new Date().toISOString(),
+                                exifData: meta.exifData
                             });
                         }
 
@@ -1478,7 +1510,13 @@
                     document.getElementById('projectTitle').textContent = projectName;
                     autoSave();
 
-                    showNotification('✅ Project loaded from ZIP!');
+                    // Refresh image libraries for all tabs
+                    setTimeout(async () => {
+                        for (const tab of tabs) {
+                            await renderImageLibrary(tab.id);
+                        }
+                        showNotification('✅ Project and images loaded from ZIP!');
+                    }, 200);
                 } catch (err) {
                     console.error('ZIP load error:', err);
                     alert('Failed to load ZIP file: ' + err.message);
