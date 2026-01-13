@@ -1265,6 +1265,15 @@
     <div id="tabContents"></div>
 
     <script>
+        // Tab type constants for standardization and future extensibility
+        const TAB_TYPES = {
+            GRAPH: 'graph',
+            FIELD_MAP: 'fieldmap',
+            PROTOCOL: 'protocol',      // Future: Protocol documents/PDFs
+            REPORT: 'report',          // Future: Generated reports and analysis
+            RANDOM_IMAGE: 'random'     // Future: Miscellaneous images
+        };
+
         // Global state
         let tabs = [];
         let activeTabId = null;
@@ -1323,25 +1332,20 @@
                 tabCounter: tabCounter,
                 activeTabId: activeTabId,
                 tabs: tabs.map(tab => {
-                    if (tab.type === 'fieldmap') {
+                    if (tab.type === TAB_TYPES.FIELD_MAP) {
                         return {
                             id: tab.id,
-                            type: 'fieldmap',
+                            type: TAB_TYPES.FIELD_MAP,
                             name: tab.name,
                             currentDateIndex: tab.currentDateIndex,
+                            treatments: tab.treatments,  // Unified treatment storage
                             gridSetup: tab.gridSetup,
-                            images: tab.images.map(img => ({
-                                id: img.id,
-                                fileName: img.fileName,
-                                date: img.date,
-                                corners: img.corners
-                                // Note: imageData (Blob) excluded from localStorage
-                            }))
+                            imageIds: tab.imageIds || []  // Store image IDs only (images in IndexedDB)
                         };
                     } else {
                         return {
                             id: tab.id,
-                            type: 'graph',
+                            type: TAB_TYPES.GRAPH,
                             name: tab.name,
                             graphTitle: tab.graphTitle,
                             yAxisLabel: tab.yAxisLabel,
@@ -1376,24 +1380,20 @@
                 projectName: projectName,
                 tabCounter: tabCounter,
                 tabs: tabs.map(tab => {
-                    if (tab.type === 'fieldmap') {
+                    if (tab.type === TAB_TYPES.FIELD_MAP) {
                         return {
                             id: tab.id,
-                            type: 'fieldmap',
+                            type: TAB_TYPES.FIELD_MAP,
                             name: tab.name,
                             currentDateIndex: tab.currentDateIndex,
+                            treatments: tab.treatments,  // Unified treatment storage
                             gridSetup: tab.gridSetup,
-                            images: tab.images.map(img => ({
-                                id: img.id,
-                                fileName: img.fileName,
-                                date: img.date,
-                                corners: img.corners
-                            }))
+                            imageIds: tab.imageIds || []  // Store image IDs only (images in IndexedDB)
                         };
                     } else {
                         return {
                             id: tab.id,
-                            type: 'graph',
+                            type: TAB_TYPES.GRAPH,
                             name: tab.name,
                             graphTitle: tab.graphTitle,
                             yAxisLabel: tab.yAxisLabel,
@@ -1422,20 +1422,7 @@
             // Add project JSON
             zip.file('project.json', JSON.stringify(project, null, 2));
 
-            // Add images from Field Map tabs
-            let fieldMapImageCount = 0;
-            for (const tab of tabs) {
-                if (tab.type === 'fieldmap' && tab.images.length > 0) {
-                    const tabFolder = zip.folder(`fieldmap_images/${tab.id}`);
-                    for (const image of tab.images) {
-                        const fileName = `${image.id}_${image.fileName}`;
-                        tabFolder.file(fileName, image.imageData);
-                        fieldMapImageCount++;
-                    }
-                }
-            }
-
-            // Add all images from IndexedDB with metadata (for Graph tabs)
+            // Add all images from IndexedDB (unified storage for all image types)
             const allImages = await imageDB.getAll();
             if (allImages.length > 0) {
                 const imagesFolder = zip.folder('images');
@@ -1445,23 +1432,24 @@
                     const fileName = `${image.id}_${image.fileName}`;
                     imagesFolder.file(fileName, image.imageData);
 
-                    // Store metadata separately
+                    // Store comprehensive metadata
                     imageMetadata.push({
                         id: image.id,
                         fileName: image.fileName,
                         tabId: image.tabId,
+                        imageType: image.imageType,  // 'graph', 'fieldmap', etc.
                         date: image.date,
                         uploadedAt: image.uploadedAt,
-                        exifData: image.exifData
+                        exifData: image.exifData,
+                        corners: image.corners,  // For field map images
+                        thumbnail: image.thumbnail
                     });
                 }
 
                 // Add metadata JSON
                 zip.file('images/metadata.json', JSON.stringify(imageMetadata, null, 2));
 
-                showNotification(`📸 Added ${allImages.length + fieldMapImageCount} images to ZIP`);
-            } else if (fieldMapImageCount > 0) {
-                showNotification(`📸 Added ${fieldMapImageCount} images to ZIP`);
+                showNotification(`📸 Added ${allImages.length} images to ZIP`);
             }
 
             // Generate ZIP blob
@@ -1509,28 +1497,7 @@
                     const projectText = await projectFile.async('text');
                     const project = JSON.parse(projectText);
 
-                    // Load Field Map images from fieldmap_images folders
-                    let fieldMapImageCount = 0;
-                    for (const savedTab of project.tabs) {
-                        if (savedTab.type === 'fieldmap' && savedTab.images.length > 0) {
-                            const tabFolder = zip.folder(`fieldmap_images/${savedTab.id}`);
-                            if (tabFolder) {
-                                // Load images for this Field Map tab
-                                for (const imageMetadata of savedTab.images) {
-                                    const imageFileName = `${imageMetadata.id}_${imageMetadata.fileName}`;
-                                    const imageFile = zip.file(`fieldmap_images/${savedTab.id}/${imageFileName}`);
-                                    if (imageFile) {
-                                        const blob = await imageFile.async('blob');
-                                        // Store the blob in the image metadata
-                                        imageMetadata.imageData = blob;
-                                        fieldMapImageCount++;
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Load images folder (for Graph tabs)
+                    // Load all images from unified images folder (graph and field map images)
                     const imagesFolder = zip.folder('images');
                     if (imagesFolder) {
                         // Load metadata first
@@ -1550,13 +1517,13 @@
                         });
 
                         if (imageFiles.length > 0) {
-                            showNotification(`📸 Loading ${imageFiles.length + fieldMapImageCount} images...`);
+                            showNotification(`📸 Loading ${imageFiles.length} images...`);
                         }
 
                         // Clear existing images from IndexedDB
                         await imageDB.clear();
 
-                        // Load each image
+                        // Load each image into IndexedDB with full metadata
                         for (const { relativePath, file } of imageFiles) {
                             const blob = await file.async('blob');
 
@@ -1568,21 +1535,24 @@
                             // Find metadata for this image
                             const meta = metadata.find(m => m.id === id) || {};
 
-                            // Store in IndexedDB with full metadata
+                            // Store in IndexedDB with comprehensive metadata
                             await imageDB.add({
                                 id: id,
                                 fileName: meta.fileName || fileName,
                                 imageData: blob,
                                 tabId: meta.tabId,
+                                imageType: meta.imageType || TAB_TYPES.GRAPH,  // Default to graph for old projects
                                 date: meta.date,
                                 uploadedAt: meta.uploadedAt || new Date().toISOString(),
-                                exifData: meta.exifData
+                                exifData: meta.exifData,
+                                corners: meta.corners || null,  // For field map images
+                                thumbnail: meta.thumbnail
                             });
                         }
 
-                        showNotification(`✅ Loaded ${imageFiles.length + fieldMapImageCount} images`);
-                    } else if (fieldMapImageCount > 0) {
-                        showNotification(`✅ Loaded ${fieldMapImageCount} images`);
+                        if (imageFiles.length > 0) {
+                            showNotification(`✅ Loaded ${imageFiles.length} images`);
+                        }
                     }
 
                     // Load project data
@@ -1594,12 +1564,12 @@
                     // Refresh image libraries and Field Map images for all tabs
                     setTimeout(async () => {
                         for (const tab of tabs) {
-                            if (tab.type === 'fieldmap') {
+                            if (tab.type === TAB_TYPES.FIELD_MAP) {
                                 // Render Field Map images
-                                if (tab.images.length > 0) {
+                                if (tab.imageIds && tab.imageIds.length > 0) {
                                     const timeline = document.getElementById(`timeline_${tab.id}`);
                                     if (timeline) timeline.style.display = 'flex';
-                                    renderFieldMapImage(tab.id);
+                                    await renderFieldMapImage(tab.id);
                                 }
                             } else {
                                 // Render Graph tab image library
@@ -1652,16 +1622,16 @@
             project.tabs.forEach(savedTab => {
                 let tab;
 
-                if (savedTab.type === 'fieldmap') {
+                if (savedTab.type === TAB_TYPES.FIELD_MAP || savedTab.type === 'fieldmap') {
                     // Restore Field Map tab
                     tab = {
                         id: savedTab.id,
-                        type: 'fieldmap',
+                        type: TAB_TYPES.FIELD_MAP,
                         name: savedTab.name,
-                        images: savedTab.images || [],
+                        imageIds: savedTab.imageIds || [],  // Image IDs from IndexedDB
                         currentDateIndex: savedTab.currentDateIndex || 0,
+                        treatments: savedTab.treatments || savedTab.gridSetup?.treatments || [],  // Unified treatment storage (backward compatible)
                         gridSetup: savedTab.gridSetup || {
-                            treatments: [],
                             rows: 0,
                             cols: 0,
                             replicates: 4,
@@ -1673,7 +1643,7 @@
                     // Restore Graph tab (default)
                     tab = {
                         id: savedTab.id,
-                        type: 'graph',
+                        type: TAB_TYPES.GRAPH,
                         name: savedTab.name,
                         graphTitle: savedTab.graphTitle || 'Trial Results',
                         yAxisLabel: savedTab.yAxisLabel || 'Green Coverage (%)',
@@ -1694,7 +1664,7 @@
                 createTabContent(tab);
 
                 // Only restore graph-specific elements for graph tabs
-                if (tab.type !== 'fieldmap') {
+                if (tab.type !== TAB_TYPES.FIELD_MAP) {
                     // Restore raw data to textarea
                     if (savedTab.rawData) {
                         document.getElementById('dataInput_' + tab.id).value = savedTab.rawData;
@@ -1825,20 +1795,20 @@
             }, 100);
         }
 
-        function addNewTab(type = 'graph') {
+        function addNewTab(type = TAB_TYPES.GRAPH) {
             tabCounter++;
-            const tabId = (type === 'fieldmap' ? 'fieldmap_' : 'tab_') + tabCounter;
+            const tabId = (type === TAB_TYPES.FIELD_MAP ? 'fieldmap_' : 'tab_') + tabCounter;
 
             let tab;
-            if (type === 'fieldmap') {
+            if (type === TAB_TYPES.FIELD_MAP) {
                 tab = {
                     id: tabId,
-                    type: 'fieldmap',
+                    type: TAB_TYPES.FIELD_MAP,
                     name: 'Field Map',
-                    images: [],
+                    imageIds: [],  // Store image IDs instead of full image objects
                     currentDateIndex: 0,
+                    treatments: [],  // Unified: Same location as graph tabs
                     gridSetup: {
-                        treatments: [],
                         rows: 0,
                         cols: 0,
                         replicates: 4,
@@ -1849,7 +1819,7 @@
             } else {
                 tab = {
                     id: tabId,
-                    type: 'graph',
+                    type: TAB_TYPES.GRAPH,
                     name: 'Graph ' + tabCounter,
                     data: null,
                     graphTitle: 'Trial Results',
@@ -1858,7 +1828,7 @@
                     yAxisMin: 0,
                     yAxisMax: 100,
                     yAxisPercent: true,
-                    treatments: [],
+                    treatments: [],  // Unified: Same location as field map tabs
                     dates: [],
                     currentDateIndex: 0,
                     legendAscending: true
@@ -1890,7 +1860,7 @@
             content.className = 'tab-content';
 
             // Check tab type and render appropriate content
-            if (tab.type === 'fieldmap') {
+            if (tab.type === TAB_TYPES.FIELD_MAP) {
                 content.innerHTML = createFieldMapContent(tab);
             } else {
                 content.innerHTML = createGraphContent(tab);
@@ -2311,7 +2281,7 @@
         }
 
         // Field Map Functions
-        function uploadFieldMapImages(tabId) {
+        async function uploadFieldMapImages(tabId) {
             const input = document.createElement('input');
             input.type = 'file';
             input.accept = 'image/*';
@@ -2323,6 +2293,11 @@
 
                 showNotification(`📸 Uploading ${files.length} images...`);
 
+                // Initialize imageIds array if it doesn't exist
+                if (!tab.imageIds) {
+                    tab.imageIds = [];
+                }
+
                 for (const file of files) {
                     // Extract EXIF data
                     const exifData = await extractEXIF(file);
@@ -2331,9 +2306,11 @@
                     // Generate thumbnail
                     const thumbnail = await generateThumbnail(file, 200);
 
-                    // Create image record
+                    // Create image record with imageType for IndexedDB
                     const imageRecord = {
                         id: generateUUID(),
+                        tabId: tabId,
+                        imageType: TAB_TYPES.FIELD_MAP,  // Tag as field map image
                         fileName: file.name,
                         date: imageDate.toISOString().split('T')[0],
                         imageData: file,
@@ -2351,12 +2328,17 @@
                         corners: null  // Will be set per-image
                     };
 
-                    // Add to tab's images array
-                    tab.images.push(imageRecord);
+                    // Save to IndexedDB instead of in-memory array
+                    await imageDB.save(imageRecord);
+
+                    // Store just the ID in the tab for ordering
+                    tab.imageIds.push(imageRecord.id);
                 }
 
-                // Sort images by date
-                tab.images.sort((a, b) => new Date(a.date) - new Date(b.date));
+                // Sort image IDs by date (fetch from DB and sort)
+                const images = await imageDB.getByTabAndType(tabId, TAB_TYPES.FIELD_MAP);
+                images.sort((a, b) => new Date(a.date) - new Date(b.date));
+                tab.imageIds = images.map(img => img.id);
 
                 // Show timeline
                 document.getElementById(`timeline_${tabId}`).style.display = 'block';
@@ -2373,9 +2355,13 @@
 
         async function renderFieldMapImage(tabId) {
             const tab = tabs.find(t => t.id === tabId);
-            if (!tab || tab.images.length === 0) return;
+            if (!tab || !tab.imageIds || tab.imageIds.length === 0) return;
 
-            const currentImage = tab.images[tab.currentDateIndex];
+            // Fetch current image from IndexedDB
+            const currentImageId = tab.imageIds[tab.currentDateIndex];
+            const currentImage = await imageDB.get(currentImageId);
+            if (!currentImage) return;
+
             const imageDisplay = document.getElementById(`fieldMapImageDisplay_${tabId}`);
 
             // Create URL for image
@@ -2386,7 +2372,7 @@
 
             // Update timeline display
             document.getElementById(`currentDate_${tabId}`).textContent = formatDate(currentImage.date);
-            document.getElementById(`imageCounter_${tabId}`).textContent = `Image ${tab.currentDateIndex + 1} of ${tab.images.length}`;
+            document.getElementById(`imageCounter_${tabId}`).textContent = `Image ${tab.currentDateIndex + 1} of ${tab.imageIds.length}`;
 
             // Setup grid for this image
             const img = imageDisplay.querySelector('img');
@@ -2404,14 +2390,14 @@
 
         function navigateImage(tabId, direction) {
             const tab = tabs.find(t => t.id === tabId);
-            if (!tab || tab.images.length === 0) return;
+            if (!tab || !tab.imageIds || tab.imageIds.length === 0) return;
 
             tab.currentDateIndex += direction;
 
             // Wrap around
             if (tab.currentDateIndex < 0) {
-                tab.currentDateIndex = tab.images.length - 1;
-            } else if (tab.currentDateIndex >= tab.images.length) {
+                tab.currentDateIndex = tab.imageIds.length - 1;
+            } else if (tab.currentDateIndex >= tab.imageIds.length) {
                 tab.currentDateIndex = 0;
             }
 
@@ -2419,14 +2405,17 @@
             autoSave();
         }
 
-        function startCornerPlacement(tabId) {
+        async function startCornerPlacement(tabId) {
             const tab = tabs.find(t => t.id === tabId);
-            if (!tab || tab.images.length === 0) {
+            if (!tab || !tab.imageIds || tab.imageIds.length === 0) {
                 showNotification('⚠️ Upload images first');
                 return;
             }
 
-            const currentImage = tab.images[tab.currentDateIndex];
+            // Fetch current image from IndexedDB
+            const currentImageId = tab.imageIds[tab.currentDateIndex];
+            const currentImage = await imageDB.get(currentImageId);
+            if (!currentImage) return;
 
             // Initialize corner placement mode
             tab._cornerPlacementMode = true;
@@ -2468,15 +2457,16 @@
                     imageDisplay.appendChild(indicator);
 
                     if (tab._placedCorners.length === 4) {
-                        // Save corners to current image
+                        // Save corners to current image in IndexedDB
                         currentImage.corners = tab._placedCorners;
+                        await imageDB.save(currentImage);
                         tab._cornerPlacementMode = false;
 
                         // Show lock button
                         document.getElementById(`lockGrid_${tabId}`).style.display = 'block';
 
                         // Render grid
-                        renderFieldMapGrid(tabId);
+                        await renderFieldMapGrid(tabId);
 
                         showNotification('✓ Corners placed! Adjust if needed, then lock grid');
                         imageDisplay.removeEventListener('click', handleClick);
@@ -2489,12 +2479,14 @@
             imageDisplay.addEventListener('click', handleClick);
         }
 
-        function renderFieldMapGrid(tabId) {
+        async function renderFieldMapGrid(tabId) {
             const tab = tabs.find(t => t.id === tabId);
-            if (!tab || tab.images.length === 0) return;
+            if (!tab || !tab.imageIds || tab.imageIds.length === 0) return;
 
-            const currentImage = tab.images[tab.currentDateIndex];
-            if (!currentImage.corners || currentImage.corners.length !== 4) return;
+            // Fetch current image from IndexedDB
+            const currentImageId = tab.imageIds[tab.currentDateIndex];
+            const currentImage = await imageDB.get(currentImageId);
+            if (!currentImage || !currentImage.corners || currentImage.corners.length !== 4) return;
 
             const imageDisplay = document.getElementById(`fieldMapImageDisplay_${tabId}`);
             const img = imageDisplay.querySelector('img');
@@ -3274,11 +3266,11 @@
             }
         }
 
-        // IndexedDB Manager for drone images
+        // IndexedDB Manager for all project images (graphs, field maps, protocols, etc.)
         class ImageDatabase {
             constructor() {
                 this.dbName = 'stri_graph_generator_images';
-                this.version = 1;
+                this.version = 2;  // Incremented to support multiple image types
                 this.db = null;
             }
 
@@ -3294,10 +3286,20 @@
 
                     request.onupgradeneeded = (event) => {
                         const db = event.target.result;
+
+                        // Create or upgrade the droneImages store
                         if (!db.objectStoreNames.contains('droneImages')) {
                             const store = db.createObjectStore('droneImages', { keyPath: 'id' });
                             store.createIndex('tabId', 'tabId', { unique: false });
                             store.createIndex('date', 'date', { unique: false });
+                            store.createIndex('imageType', 'imageType', { unique: false });
+                        } else if (event.oldVersion < 2) {
+                            // Upgrade existing store to add imageType index
+                            const transaction = event.target.transaction;
+                            const store = transaction.objectStore('droneImages');
+                            if (!store.indexNames.contains('imageType')) {
+                                store.createIndex('imageType', 'imageType', { unique: false });
+                            }
                         }
                     };
                 });
@@ -3371,6 +3373,59 @@
                     const request = store.delete(imageId);
                     request.onsuccess = () => resolve();
                     request.onerror = () => reject(request.error);
+                });
+            }
+
+            // Get all images by type (e.g., 'graph', 'fieldmap')
+            async getAllByType(imageType) {
+                const db = await this.open();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction('droneImages', 'readonly');
+                    const store = tx.objectStore('droneImages');
+                    const index = store.index('imageType');
+                    const request = index.getAll(imageType);
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            // Get images by tab and type for better organization
+            async getByTabAndType(tabId, imageType) {
+                const db = await this.open();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction('droneImages', 'readonly');
+                    const store = tx.objectStore('droneImages');
+                    const request = store.getAll();
+                    request.onsuccess = () => {
+                        const results = request.result.filter(
+                            img => img.tabId === tabId && img.imageType === imageType
+                        );
+                        resolve(results);
+                    };
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            // Delete all images for a specific tab
+            async deleteByTab(tabId) {
+                const images = await this.getAllByTab(tabId);
+                const db = await this.open();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction('droneImages', 'readwrite');
+                    const store = tx.objectStore('droneImages');
+                    let deletedCount = 0;
+
+                    images.forEach(img => {
+                        const request = store.delete(img.id);
+                        request.onsuccess = () => {
+                            deletedCount++;
+                            if (deletedCount === images.length) {
+                                resolve(deletedCount);
+                            }
+                        };
+                    });
+
+                    if (images.length === 0) resolve(0);
                 });
             }
         }
@@ -3671,8 +3726,8 @@
                 return;
             }
 
-            // Get treatments from correct location based on tab type
-            const treatments = tab.type === 'fieldmap' ? tab.gridSetup.treatments : tab.treatments;
+            // Get treatments from unified location (always tab.treatments)
+            const treatments = tab.treatments;
             if (!treatments || treatments.length === 0) {
                 console.log('No treatments found in tab');
                 return;
@@ -4079,16 +4134,15 @@
                 return;
             }
 
-            // Copy treatments to target tab
-            if (targetTab.type === 'fieldmap') {
-                // For Field Map tabs, store in gridSetup
-                targetTab.gridSetup.treatments = JSON.parse(JSON.stringify(sourceTab.treatments));
+            // Copy treatments to target tab (unified storage location)
+            targetTab.treatments = JSON.parse(JSON.stringify(sourceTab.treatments));
+
+            // Sync treatment UI
+            syncFieldMapTreatments(targetTabId);
+
+            if (targetTab.type === TAB_TYPES.FIELD_MAP) {
                 showNotification(`✓ Pulled ${sourceTab.treatments.length} treatments to Field Map`);
             } else {
-                // For Graph tabs, store in treatments
-                targetTab.treatments = JSON.parse(JSON.stringify(sourceTab.treatments));
-                // Sync to field map (old architecture)
-                syncFieldMapTreatments(targetTabId);
                 showNotification(`✓ Pulled ${sourceTab.treatments.length} treatments from "${sourceTab.name}"`);
             }
 
