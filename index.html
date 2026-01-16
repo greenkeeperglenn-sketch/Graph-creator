@@ -2269,7 +2269,7 @@
         }
 
         function setupTabListeners(tab) {
-            if (tab.type === 'fieldmap') {
+            if (tab.type === TAB_TYPES.FIELD_MAP || tab.type === 'fieldmap') {
                 // Field map specific setup
                 populateSourceGraphDropdown(tab.id);
             } else {
@@ -4028,8 +4028,8 @@
 
             // Get treatments and cellTreatments based on tab type
             let treatments, cellTreatments;
-            if (tab.type === 'fieldmap') {
-                treatments = tab.gridSetup?.treatments;
+            if (tab.type === TAB_TYPES.FIELD_MAP || tab.type === 'fieldmap') {
+                treatments = tab.treatments;  // Unified storage location
                 cellTreatments = tab.gridSetup?.cellTreatments;
                 if (!treatments) return;
             } else {
@@ -4102,7 +4102,11 @@
 
             // Add all Graph tabs that have treatments (excluding current tab and Field Maps)
             tabs.forEach(tab => {
-                if (tab.id !== tabId && tab.type !== 'fieldmap' && tab.treatments && tab.treatments.length > 0) {
+                if (tab.id !== tabId &&
+                    tab.type !== TAB_TYPES.FIELD_MAP &&
+                    tab.type !== 'fieldmap' &&
+                    tab.treatments &&
+                    tab.treatments.length > 0) {
                     const option = document.createElement('option');
                     option.value = tab.id;
                     option.textContent = `${tab.name} (${tab.treatments.length} treatments)`;
