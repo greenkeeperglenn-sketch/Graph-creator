@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Storage</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: #1a1a2e;
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 40px;
+            background: #16213e;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        button {
+            padding: 15px 30px;
+            font-size: 16px;
+            background: #10b981;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover {
+            background: #059669;
+        }
+        .status {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #10b981;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Storage Utility</h1>
+        <p>Clear browser storage to fix loading issues</p>
+        <button onclick="clearAndReload()">Clear Storage & Reload</button>
+        <button onclick="goToApp()">Go to App (Skip Clear)</button>
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        function clearAndReload() {
+            localStorage.clear();
+            sessionStorage.clear();
+            document.getElementById('status').textContent = '✓ Storage cleared!';
+            setTimeout(() => {
+                window.location.href = 'index.html';
+            }, 500);
+        }
+
+        function goToApp() {
+            window.location.href = 'index.html';
+        }
+    </script>
+</body>
+</html>
