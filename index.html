@@ -1248,7 +1248,7 @@
             <p class="subtitle">STRI's Data Visualisation Tool</p>
         </div>
         <div class="header-title" id="projectTitle">Untitled Project</div>
-        <div class="version-indicator">v6.0 - FIELD MAPS</div>
+        <div class="version-indicator">v6.1 - UNIFIED ARCHITECTURE</div>
     </div>
 
     <div class="tab-bar">
@@ -1279,6 +1279,7 @@
         let activeTabId = null;
         let tabCounter = 0;
         let projectName = 'Untitled Project';
+        let inputPanelsCollapsed = false;
 
         // Logo for watermark
         const logoPath = 'Picture2.png';
@@ -3078,8 +3079,6 @@
                 }
             });
         }
-
-        let inputPanelsCollapsed = false;
 
         function toggleInputPanel() {
             inputPanelsCollapsed = !inputPanelsCollapsed;
