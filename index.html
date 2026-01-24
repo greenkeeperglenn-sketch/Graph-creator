@@ -1309,19 +1309,32 @@
 
         // Initialize - load from localStorage or create new tab
         document.addEventListener('DOMContentLoaded', () => {
+            console.log('=== App Initializing ===');
             const saved = localStorage.getItem(STORAGE_KEY);
+            console.log('Saved data exists:', !!saved);
+
             if (saved) {
                 try {
                     const project = JSON.parse(saved);
+                    console.log('Parsed project:', project);
                     loadProjectData(project, false);
                     console.log('Auto-loaded project from localStorage');
                 } catch (e) {
-                    console.warn('Failed to load saved project:', e);
+                    console.error('Failed to load saved project:', e);
                     addNewTab();
                 }
             } else {
+                console.log('No saved data, creating new tab');
                 addNewTab();
             }
+
+            // Safety check: ensure at least one tab exists
+            setTimeout(() => {
+                if (tabs.length === 0) {
+                    console.warn('No tabs found after init, creating emergency tab');
+                    addNewTab();
+                }
+            }, 100);
         });
 
         // Auto-save to localStorage whenever tabs change
@@ -1797,8 +1810,10 @@
         }
 
         function addNewTab(type = TAB_TYPES.GRAPH) {
+            console.log('=== addNewTab called ===', { type, tabCounter });
             tabCounter++;
             const tabId = (type === TAB_TYPES.FIELD_MAP ? 'fieldmap_' : 'tab_') + tabCounter;
+            console.log('Generated tabId:', tabId);
 
             let tab;
             if (type === TAB_TYPES.FIELD_MAP) {
@@ -1836,12 +1851,22 @@
                 };
             }
 
+            console.log('Created tab object:', tab);
             tabs.push(tab);
+            console.log('tabs array now has', tabs.length, 'tabs');
+
             renderTabs();
+            console.log('renderTabs() completed');
+
             createTabContent(tab);
+            console.log('createTabContent() completed');
+
             switchToTab(tabId);
+            console.log('switchToTab() completed');
+
             updateTabCount();
             autoSave();
+            console.log('=== addNewTab finished ===');
         }
 
         function renderTabs() {
@@ -1855,20 +1880,30 @@
         }
 
         function createTabContent(tab) {
+            console.log('=== createTabContent called ===', { tabId: tab.id, type: tab.type });
             const container = document.getElementById('tabContents');
+            console.log('tabContents container:', container);
+
             const content = document.createElement('div');
             content.id = 'content_' + tab.id;
             content.className = 'tab-content';
+            console.log('Created content div with id:', content.id);
 
             // Check tab type and render appropriate content
-            if (tab.type === TAB_TYPES.FIELD_MAP) {
+            if (tab.type === TAB_TYPES.FIELD_MAP || tab.type === 'fieldmap') {
+                console.log('Creating field map content');
                 content.innerHTML = createFieldMapContent(tab);
             } else {
+                console.log('Creating graph content');
                 content.innerHTML = createGraphContent(tab);
             }
 
+            console.log('Content innerHTML length:', content.innerHTML.length);
             container.appendChild(content);
+            console.log('Appended content to container');
+
             setupTabListeners(tab);
+            console.log('=== createTabContent finished ===');
         }
 
         // Create content for Graph Assessment tabs
