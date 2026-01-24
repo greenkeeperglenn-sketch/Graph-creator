@@ -2464,7 +2464,7 @@
             if (!img) return;
 
             // Setup click listener
-            const handleClick = (e) => {
+            const handleClick = async (e) => {
                 if (!tab._cornerPlacementMode) return;
 
                 const bounds = getRenderedImageBounds(img);
