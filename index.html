@@ -1280,6 +1280,7 @@
         let tabCounter = 0;
         let projectName = 'Untitled Project';
         let inputPanelsCollapsed = false;
+        let isDataUnlocked = false;  // Global password protection state
 
         // Logo for watermark
         const logoPath = 'Picture2.png';
@@ -1944,14 +1945,14 @@
                             </div>
                             <div class="input-group" style="flex:1;">
                                 <label>Paste Data (from Excel/GenStat)</label>
-                                <div class="password-overlay" id="passwordOverlay_${tab.id}">
+                                <div class="password-overlay" id="passwordOverlay_${tab.id}" style="display: ${isDataUnlocked ? 'none' : 'flex'}">
                                     <div class="password-box">
                                         <p>Enter password to access data input</p>
                                         <input type="password" id="passwordInput_${tab.id}" placeholder="Password" onkeyup="if(event.key==='Enter')checkPassword('${tab.id}')">
                                         <button type="button" onclick="checkPassword('${tab.id}')">Unlock</button>
                                     </div>
                                 </div>
-                                <textarea id="dataInput_${tab.id}" class="locked" placeholder="Paste your data here...&#10;&#10;Format: Treatment name, values separated by tabs, then letter groups" disabled></textarea>
+                                <textarea id="dataInput_${tab.id}" class="${isDataUnlocked ? '' : 'locked'}" placeholder="Paste your data here...&#10;&#10;Format: Treatment name, values separated by tabs, then letter groups" ${isDataUnlocked ? '' : 'disabled'}></textarea>
                             </div>
                             <div id="status_${tab.id}" class="status"></div>
                             <div class="btn-row">
@@ -2718,17 +2719,36 @@
 
         function checkPassword(tabId) {
             const input = document.getElementById('passwordInput_' + tabId);
-            const overlay = document.getElementById('passwordOverlay_' + tabId);
-            const textarea = document.getElementById('dataInput_' + tabId);
-            
+
             console.log('Checking password for tab:', tabId, 'Value:', input.value);
-            
+
             if (input.value === 'STRI123') {
-                console.log('Password correct!');
-                overlay.style.display = 'none';
-                textarea.classList.remove('locked');
-                textarea.disabled = false;
-                textarea.focus();
+                console.log('Password correct! Unlocking all tabs globally.');
+
+                // Set global unlock state
+                isDataUnlocked = true;
+
+                // Unlock ALL existing graph tabs
+                tabs.forEach(tab => {
+                    if (tab.type === TAB_TYPES.GRAPH || tab.type === 'graph') {
+                        const overlay = document.getElementById('passwordOverlay_' + tab.id);
+                        const textarea = document.getElementById('dataInput_' + tab.id);
+
+                        if (overlay && textarea) {
+                            overlay.style.display = 'none';
+                            textarea.classList.remove('locked');
+                            textarea.disabled = false;
+                        }
+                    }
+                });
+
+                // Focus on the current tab's textarea
+                const currentTextarea = document.getElementById('dataInput_' + tabId);
+                if (currentTextarea) {
+                    currentTextarea.focus();
+                }
+
+                showNotification('✅ Data input unlocked for all tabs!');
             } else {
                 console.log('Password incorrect');
                 input.value = '';
