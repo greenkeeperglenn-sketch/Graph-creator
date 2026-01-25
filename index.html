@@ -2830,6 +2830,75 @@
                     }
                 }
             }
+
+            // Add draggable corner handles (only if grid not locked)
+            if (!tab.gridSetup.locked) {
+                const cornerLabels = ['TL', 'TR', 'BR', 'BL'];
+                corners.forEach((corner, index) => {
+                    const handle = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    handle.setAttribute('class', 'corner-handle');
+                    handle.setAttribute('data-corner-index', index);
+                    handle.style.cursor = 'move';
+
+                    // Circle
+                    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    circle.setAttribute('cx', corner.x);
+                    circle.setAttribute('cy', corner.y);
+                    circle.setAttribute('r', '8');
+                    circle.setAttribute('fill', '#10b981');
+                    circle.setAttribute('stroke', 'white');
+                    circle.setAttribute('stroke-width', '2');
+
+                    // Label
+                    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    text.setAttribute('x', corner.x);
+                    text.setAttribute('y', corner.y - 12);
+                    text.setAttribute('text-anchor', 'middle');
+                    text.setAttribute('fill', 'white');
+                    text.setAttribute('font-size', '10');
+                    text.setAttribute('font-weight', 'bold');
+                    text.textContent = cornerLabels[index];
+
+                    handle.appendChild(circle);
+                    handle.appendChild(text);
+                    gridContainer.appendChild(handle);
+
+                    // Make corner draggable
+                    let isDragging = false;
+
+                    handle.addEventListener('mousedown', (e) => {
+                        isDragging = true;
+                        gridOverlay.style.cursor = 'move';
+                        e.stopPropagation();
+                    });
+
+                    gridOverlay.addEventListener('mousemove', async (e) => {
+                        if (isDragging) {
+                            const rect = gridOverlay.getBoundingClientRect();
+                            const newX = e.clientX - rect.left;
+                            const newY = e.clientY - rect.top;
+
+                            // Update corner position
+                            corners[index] = { x: newX, y: newY };
+                            currentImage.corners = corners;
+
+                            // Rerender grid
+                            await renderFieldMapGrid(tabId);
+                            e.stopPropagation();
+                        }
+                    });
+
+                    gridOverlay.addEventListener('mouseup', async () => {
+                        if (isDragging) {
+                            isDragging = false;
+                            gridOverlay.style.cursor = 'crosshair';
+                            // Save to IndexedDB
+                            await imageDB.save(currentImage);
+                            showNotification('✓ Corner updated');
+                        }
+                    });
+                });
+            }
         }
 
         function lockFieldMapGrid(tabId) {
