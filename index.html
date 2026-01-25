@@ -2451,6 +2451,7 @@
 
                 // Display first image
                 tab.currentDateIndex = 0;
+                tab._imageChanged = true; // Reset zoom to fit
                 await renderFieldMapImage(tabId);
 
                 showNotification(`✅ Uploaded ${files.length} images successfully!`);
@@ -2462,18 +2463,6 @@
         async function renderFieldMapImage(tabId) {
             const tab = tabs.find(t => t.id === tabId);
             if (!tab || !tab.imageIds || tab.imageIds.length === 0) return;
-
-            // Initialize zoom/pan state if not exists
-            if (!tab.zoomState) {
-                tab.zoomState = {
-                    scale: 1,
-                    panX: 0,
-                    panY: 0,
-                    isDragging: false,
-                    startX: 0,
-                    startY: 0
-                };
-            }
 
             // Fetch current image from IndexedDB
             const currentImageId = tab.imageIds[tab.currentDateIndex];
@@ -2488,7 +2477,7 @@
             // Display image with transform support
             imageDisplay.innerHTML = `
                 <div id="imageContainer_${tabId}" style="position: relative; transform-origin: center center; transition: transform 0.1s ease-out;">
-                    <img id="fieldMapImg_${tabId}" src="${imageURL}" alt="${currentImage.fileName}" style="display: block; max-width: none; max-height: none; user-select: none;">
+                    <img id="fieldMapImg_${tabId}" src="${imageURL}" alt="${currentImage.fileName}" style="display: block; user-select: none;">
                 </div>
             `;
 
@@ -2496,18 +2485,45 @@
             document.getElementById(`currentDate_${tabId}`).textContent = formatDate(currentImage.date);
             document.getElementById(`imageCounter_${tabId}`).textContent = `Image ${tab.currentDateIndex + 1} of ${tab.imageIds.length}`;
 
-            // Setup zoom/pan controls
-            setupFieldMapZoomPan(tabId);
+            const img = document.getElementById(`fieldMapImg_${tabId}`);
 
-            // Apply current zoom/pan state
-            applyFieldMapTransform(tabId);
+            // Wait for image to load, then calculate fit-to-view scale
+            img.onload = () => {
+                // Calculate scale to fit image in viewport
+                const containerRect = imageDisplay.getBoundingClientRect();
+                const scaleX = (containerRect.width * 0.9) / img.naturalWidth;
+                const scaleY = (containerRect.height * 0.9) / img.naturalHeight;
+                const fitScale = Math.min(scaleX, scaleY);
 
-            // If this image has corners saved, render the grid
-            if (currentImage.corners && currentImage.corners.length === 4) {
-                setTimeout(() => {
-                    renderFieldMapGrid(tabId);
-                }, 100);
-            }
+                // Initialize zoom/pan state if not exists OR reset to fit
+                if (!tab.zoomState || tab._imageChanged) {
+                    tab.zoomState = {
+                        scale: fitScale,
+                        panX: 0,
+                        panY: 0,
+                        isDragging: false,
+                        startX: 0,
+                        startY: 0,
+                        minScale: Math.min(0.1, fitScale), // Allow zooming out further if needed
+                        maxScale: 5,
+                        fitScale: fitScale // Remember the fit scale
+                    };
+                    tab._imageChanged = false;
+                }
+
+                // Setup zoom/pan controls
+                setupFieldMapZoomPan(tabId);
+
+                // Apply current zoom/pan state
+                applyFieldMapTransform(tabId);
+
+                // If this image has corners saved, render the grid
+                if (currentImage.corners && currentImage.corners.length === 4) {
+                    setTimeout(() => {
+                        renderFieldMapGrid(tabId);
+                    }, 100);
+                }
+            };
         }
 
         function setupFieldMapZoomPan(tabId) {
@@ -2582,8 +2598,11 @@
             const tab = tabs.find(t => t.id === tabId);
             if (!tab || !tab.zoomState) return;
 
-            // Update scale (min 0.5x, max 5x)
-            tab.zoomState.scale = Math.max(0.5, Math.min(5, tab.zoomState.scale + delta));
+            const minScale = tab.zoomState.minScale || 0.1;
+            const maxScale = tab.zoomState.maxScale || 5;
+
+            // Update scale with dynamic limits
+            tab.zoomState.scale = Math.max(minScale, Math.min(maxScale, tab.zoomState.scale + delta));
 
             applyFieldMapTransform(tabId);
         }
@@ -2592,12 +2611,13 @@
             const tab = tabs.find(t => t.id === tabId);
             if (!tab || !tab.zoomState) return;
 
-            tab.zoomState.scale = 1;
+            // Reset to fit scale (not 1x)
+            tab.zoomState.scale = tab.zoomState.fitScale || 1;
             tab.zoomState.panX = 0;
             tab.zoomState.panY = 0;
 
             applyFieldMapTransform(tabId);
-            showNotification('🔍 Zoom reset');
+            showNotification('🔍 Fit to view');
         }
 
         function navigateImage(tabId, direction) {
@@ -2612,6 +2632,9 @@
             } else if (tab.currentDateIndex >= tab.imageIds.length) {
                 tab.currentDateIndex = 0;
             }
+
+            // Mark that image changed so zoom resets to fit
+            tab._imageChanged = true;
 
             renderFieldMapImage(tabId);
             autoSave();
