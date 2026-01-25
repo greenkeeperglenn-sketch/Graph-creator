@@ -2276,7 +2276,14 @@
                     <div style="display: flex; flex: 1; min-height: 0;">
                         <!-- Image Display -->
                         <div style="flex: 3; display: flex; flex-direction: column; position: relative; background: #1a1a2e;">
-                            <div class="image-display" id="fieldMapImageDisplay_${tab.id}" style="flex: 1; position: relative; display: flex; align-items: center; justify-content: center;">
+                            <!-- Zoom Controls -->
+                            <div style="position: absolute; top: 16px; right: 16px; z-index: 100; display: flex; gap: 8px; background: rgba(26, 26, 46, 0.9); padding: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                                <button onclick="zoomFieldMapImage('${tab.id}', 0.1)" style="padding: 8px 12px; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 6px; color: #10b981; cursor: pointer; font-weight: 600;">🔍+</button>
+                                <button onclick="zoomFieldMapImage('${tab.id}', -0.1)" style="padding: 8px 12px; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 6px; color: #10b981; cursor: pointer; font-weight: 600;">🔍−</button>
+                                <button onclick="resetFieldMapZoom('${tab.id}')" style="padding: 8px 12px; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 6px; color: #10b981; cursor: pointer; font-weight: 600;">⟲</button>
+                                <span id="zoomLevel_${tab.id}" style="padding: 8px; color: #10b981; font-weight: 600; min-width: 50px; text-align: center;">100%</span>
+                            </div>
+                            <div class="image-display" id="fieldMapImageDisplay_${tab.id}" style="flex: 1; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: grab;">
                                 <div style="text-align: center; color: rgba(255,255,255,0.3);">
                                     <div style="font-size: 3em; margin-bottom: 12px;">📷</div>
                                     <div>Upload images to get started</div>
@@ -2456,6 +2463,18 @@
             const tab = tabs.find(t => t.id === tabId);
             if (!tab || !tab.imageIds || tab.imageIds.length === 0) return;
 
+            // Initialize zoom/pan state if not exists
+            if (!tab.zoomState) {
+                tab.zoomState = {
+                    scale: 1,
+                    panX: 0,
+                    panY: 0,
+                    isDragging: false,
+                    startX: 0,
+                    startY: 0
+                };
+            }
+
             // Fetch current image from IndexedDB
             const currentImageId = tab.imageIds[tab.currentDateIndex];
             const currentImage = await imageDB.get(currentImageId);
@@ -2466,25 +2485,119 @@
             // Create URL for image
             const imageURL = URL.createObjectURL(currentImage.imageData);
 
-            // Display image
-            imageDisplay.innerHTML = `<img src="${imageURL}" alt="${currentImage.fileName}" style="max-width: 90%; max-height: 90%; object-fit: contain;">`;
+            // Display image with transform support
+            imageDisplay.innerHTML = `
+                <div id="imageContainer_${tabId}" style="position: relative; transform-origin: center center; transition: transform 0.1s ease-out;">
+                    <img id="fieldMapImg_${tabId}" src="${imageURL}" alt="${currentImage.fileName}" style="display: block; max-width: none; max-height: none; user-select: none;">
+                </div>
+            `;
 
             // Update timeline display
             document.getElementById(`currentDate_${tabId}`).textContent = formatDate(currentImage.date);
             document.getElementById(`imageCounter_${tabId}`).textContent = `Image ${tab.currentDateIndex + 1} of ${tab.imageIds.length}`;
 
-            // Setup grid for this image
-            const img = imageDisplay.querySelector('img');
-            if (img) {
-                img.style.cursor = 'crosshair';
+            // Setup zoom/pan controls
+            setupFieldMapZoomPan(tabId);
 
-                // If this image has corners saved, render the grid
-                if (currentImage.corners && currentImage.corners.length === 4) {
-                    setTimeout(() => {
-                        renderFieldMapGrid(tabId);
-                    }, 100);
-                }
+            // Apply current zoom/pan state
+            applyFieldMapTransform(tabId);
+
+            // If this image has corners saved, render the grid
+            if (currentImage.corners && currentImage.corners.length === 4) {
+                setTimeout(() => {
+                    renderFieldMapGrid(tabId);
+                }, 100);
             }
+        }
+
+        function setupFieldMapZoomPan(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            const imageDisplay = document.getElementById(`fieldMapImageDisplay_${tabId}`);
+            const container = document.getElementById(`imageContainer_${tabId}`);
+
+            if (!imageDisplay || !container || !tab) return;
+
+            // Pan with mouse drag
+            imageDisplay.addEventListener('mousedown', (e) => {
+                if (e.target.tagName === 'IMG' && !tab._cornerPlacementMode) {
+                    tab.zoomState.isDragging = true;
+                    tab.zoomState.startX = e.clientX - tab.zoomState.panX;
+                    tab.zoomState.startY = e.clientY - tab.zoomState.panY;
+                    imageDisplay.style.cursor = 'grabbing';
+                    e.preventDefault();
+                }
+            });
+
+            imageDisplay.addEventListener('mousemove', (e) => {
+                if (tab.zoomState.isDragging) {
+                    tab.zoomState.panX = e.clientX - tab.zoomState.startX;
+                    tab.zoomState.panY = e.clientY - tab.zoomState.startY;
+                    applyFieldMapTransform(tabId);
+                    e.preventDefault();
+                }
+            });
+
+            imageDisplay.addEventListener('mouseup', () => {
+                if (tab.zoomState.isDragging) {
+                    tab.zoomState.isDragging = false;
+                    imageDisplay.style.cursor = tab._cornerPlacementMode ? 'crosshair' : 'grab';
+                }
+            });
+
+            imageDisplay.addEventListener('mouseleave', () => {
+                if (tab.zoomState.isDragging) {
+                    tab.zoomState.isDragging = false;
+                    imageDisplay.style.cursor = tab._cornerPlacementMode ? 'crosshair' : 'grab';
+                }
+            });
+
+            // Mouse wheel zoom
+            imageDisplay.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                zoomFieldMapImage(tabId, delta);
+            }, { passive: false });
+        }
+
+        function applyFieldMapTransform(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            const container = document.getElementById(`imageContainer_${tabId}`);
+
+            if (!container || !tab || !tab.zoomState) return;
+
+            const { scale, panX, panY } = tab.zoomState;
+            container.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+
+            // Update zoom level display
+            const zoomDisplay = document.getElementById(`zoomLevel_${tabId}`);
+            if (zoomDisplay) {
+                zoomDisplay.textContent = Math.round(scale * 100) + '%';
+            }
+
+            // Rerender grid if it exists
+            renderFieldMapGrid(tabId);
+        }
+
+        function zoomFieldMapImage(tabId, delta) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab || !tab.zoomState) return;
+
+            // Update scale (min 0.5x, max 5x)
+            tab.zoomState.scale = Math.max(0.5, Math.min(5, tab.zoomState.scale + delta));
+
+            applyFieldMapTransform(tabId);
+        }
+
+        function resetFieldMapZoom(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab || !tab.zoomState) return;
+
+            tab.zoomState.scale = 1;
+            tab.zoomState.panX = 0;
+            tab.zoomState.panY = 0;
+
+            applyFieldMapTransform(tabId);
+            showNotification('🔍 Zoom reset');
         }
 
         function navigateImage(tabId, direction) {
@@ -2516,44 +2629,49 @@
             const currentImage = await imageDB.get(currentImageId);
             if (!currentImage) return;
 
+            // If corners already exist, make them editable
+            if (currentImage.corners && currentImage.corners.length === 4) {
+                showNotification('📍 Drag corners to adjust position');
+                await renderFieldMapGrid(tabId);
+                return;
+            }
+
             // Initialize corner placement mode
             tab._cornerPlacementMode = true;
             tab._placedCorners = [];
 
             showNotification('📍 Click 4 corners: Top-Left, Top-Right, Bottom-Right, Bottom-Left');
 
-            const imageDisplay = document.getElementById(`fieldMapImageDisplay_${tabId}`);
-            const img = imageDisplay.querySelector('img');
-            if (!img) return;
+            const imageContainer = document.getElementById(`imageContainer_${tabId}`);
+            const img = document.getElementById(`fieldMapImg_${tabId}`);
+            if (!img || !imageContainer) return;
 
-            // Setup click listener
+            // Setup click listener with zoom/pan transform
             const handleClick = async (e) => {
                 if (!tab._cornerPlacementMode) return;
+                if (e.target.classList.contains('corner-handle')) return; // Don't place corners on handles
 
-                const bounds = getRenderedImageBounds(img);
-                const rect = imageDisplay.getBoundingClientRect();
-                const clickX = e.clientX - rect.left - bounds.offsetX;
-                const clickY = e.clientY - rect.top - bounds.offsetY;
+                const imgRect = img.getBoundingClientRect();
+                const containerRect = imageContainer.getBoundingClientRect();
+
+                // Calculate click position relative to the ORIGINAL image (not transformed)
+                const scale = tab.zoomState.scale;
+                const panX = tab.zoomState.panX;
+                const panY = tab.zoomState.panY;
+
+                // Get click position relative to container
+                const clickX = e.clientX - containerRect.left;
+                const clickY = e.clientY - containerRect.top;
+
+                // Transform back to original image coordinates
+                const originalX = (clickX - panX) / scale;
+                const originalY = (clickY - panY) / scale;
 
                 // Only register clicks within image bounds
-                if (clickX >= 0 && clickX <= bounds.width && clickY >= 0 && clickY <= bounds.height) {
-                    tab._placedCorners.push({ x: clickX, y: clickY });
+                if (originalX >= 0 && originalX <= img.naturalWidth && originalY >= 0 && originalY <= img.naturalHeight) {
+                    tab._placedCorners.push({ x: originalX, y: originalY });
 
-                    // Show visual indicator
-                    const indicator = document.createElement('div');
-                    indicator.style.cssText = `
-                        position: absolute;
-                        left: ${e.clientX - rect.left}px;
-                        top: ${e.clientY - rect.top}px;
-                        width: 12px;
-                        height: 12px;
-                        background: #10b981;
-                        border: 2px solid white;
-                        border-radius: 50%;
-                        transform: translate(-50%, -50%);
-                        z-index: 100;
-                    `;
-                    imageDisplay.appendChild(indicator);
+                    showNotification(`📍 Corner ${tab._placedCorners.length}/4 placed`);
 
                     if (tab._placedCorners.length === 4) {
                         // Save corners to current image in IndexedDB
@@ -2567,15 +2685,13 @@
                         // Render grid
                         await renderFieldMapGrid(tabId);
 
-                        showNotification('✓ Corners placed! Adjust if needed, then lock grid');
-                        imageDisplay.removeEventListener('click', handleClick);
-                    } else {
-                        showNotification(`📍 Corner ${tab._placedCorners.length}/4 placed`);
+                        showNotification('✓ Corners placed! Drag to adjust, then lock grid');
+                        imageContainer.removeEventListener('click', handleClick);
                     }
                 }
             };
 
-            imageDisplay.addEventListener('click', handleClick);
+            imageContainer.addEventListener('click', handleClick);
         }
 
         async function renderFieldMapGrid(tabId) {
