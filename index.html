@@ -1238,6 +1238,60 @@
             }
         }
 
+        /* Upload Progress Bar */
+        .upload-progress {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(26, 26, 46, 0.98);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            min-width: 320px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            z-index: 10001;
+            animation: slideIn 0.3s ease;
+        }
+
+        .upload-progress-title {
+            color: #10b981;
+            font-weight: 600;
+            font-size: 0.95em;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .upload-progress-bar-bg {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            height: 8px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .upload-progress-bar-fill {
+            background: linear-gradient(90deg, #10b981, #059669);
+            height: 100%;
+            border-radius: 8px;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+        }
+
+        .upload-progress-text {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.85em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .upload-progress-percent {
+            color: #10b981;
+            font-weight: 600;
+        }
+
     </style>
 </head>
 <body>
@@ -2328,14 +2382,19 @@
                 const tab = tabs.find(t => t.id === tabId);
                 if (!tab) return;
 
-                showNotification(`📸 Uploading ${files.length} images...`);
-
                 // Initialize imageIds array if it doesn't exist
                 if (!tab.imageIds) {
                     tab.imageIds = [];
                 }
 
-                for (const file of files) {
+                // Process each file with progress tracking
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const currentIndex = i + 1;
+
+                    // Show progress bar
+                    showUploadProgress(currentIndex, files.length, file.name);
+
                     // Extract EXIF data
                     const exifData = await extractEXIF(file);
                     const imageDate = exifData.dateTaken;
@@ -2372,6 +2431,9 @@
                     tab.imageIds.push(imageRecord.id);
                 }
 
+                // Hide progress bar
+                hideUploadProgress();
+
                 // Sort image IDs by date (fetch from DB and sort)
                 const images = await imageDB.getByTabAndType(tabId, TAB_TYPES.FIELD_MAP);
                 images.sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -2384,7 +2446,7 @@
                 tab.currentDateIndex = 0;
                 await renderFieldMapImage(tabId);
 
-                showNotification(`✅ Uploaded ${files.length} images`);
+                showNotification(`✅ Uploaded ${files.length} images successfully!`);
                 autoSave();
             };
             input.click();
@@ -3562,6 +3624,53 @@
             notif.textContent = message;
             document.body.appendChild(notif);
             setTimeout(() => notif.remove(), 3000);
+        }
+
+        // Upload progress bar functions
+        let uploadProgressElement = null;
+
+        function showUploadProgress(current, total, fileName) {
+            // Create progress element if it doesn't exist
+            if (!uploadProgressElement) {
+                uploadProgressElement = document.createElement('div');
+                uploadProgressElement.className = 'upload-progress';
+                uploadProgressElement.innerHTML = `
+                    <div class="upload-progress-title">
+                        <span>📸</span>
+                        <span id="uploadProgressTitle">Uploading images...</span>
+                    </div>
+                    <div class="upload-progress-bar-bg">
+                        <div class="upload-progress-bar-fill" id="uploadProgressBar" style="width: 0%"></div>
+                    </div>
+                    <div class="upload-progress-text">
+                        <span id="uploadProgressFile">Processing...</span>
+                        <span class="upload-progress-percent" id="uploadProgressPercent">0%</span>
+                    </div>
+                `;
+                document.body.appendChild(uploadProgressElement);
+            }
+
+            // Update progress
+            const percent = Math.round((current / total) * 100);
+            const progressBar = document.getElementById('uploadProgressBar');
+            const progressPercent = document.getElementById('uploadProgressPercent');
+            const progressFile = document.getElementById('uploadProgressFile');
+
+            if (progressBar) progressBar.style.width = percent + '%';
+            if (progressPercent) progressPercent.textContent = percent + '%';
+            if (progressFile) progressFile.textContent = `${current}/${total}: ${fileName}`;
+        }
+
+        function hideUploadProgress() {
+            if (uploadProgressElement) {
+                uploadProgressElement.style.animation = 'slideIn 0.3s ease reverse';
+                setTimeout(() => {
+                    if (uploadProgressElement) {
+                        uploadProgressElement.remove();
+                        uploadProgressElement = null;
+                    }
+                }, 300);
+            }
         }
 
         // Upload drone image
