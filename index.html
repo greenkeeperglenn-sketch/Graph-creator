@@ -4163,7 +4163,9 @@
          * and treatment rows below it. Returns null if no valid table found.
          */
         function extractTableFromSheet(sheet, sheetName) {
-            const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+            // Use raw values first, then also get formatted values for date detection
+            const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true });
+            const jsonFormatted = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
             if (!jsonData || jsonData.length < 2) return null;
 
             // Find the header row - the one that contains date-like values
@@ -4172,11 +4174,14 @@
 
             for (let r = 0; r < Math.min(jsonData.length, 15); r++) {
                 const row = jsonData[r];
+                const rowFmt = jsonFormatted[r];
                 if (!row || row.length < 2) continue;
 
                 for (let c = 0; c < row.length; c++) {
-                    const val = cellToString(row[c]).trim();
-                    if (isDateLike(val)) {
+                    // Check both raw (converted) and formatted values for date detection
+                    const valRaw = cellToString(row[c]).trim();
+                    const valFmt = (rowFmt && rowFmt[c] != null) ? String(rowFmt[c]).trim() : '';
+                    if (isDateLike(valRaw) || isDateLike(valFmt)) {
                         headerRowIdx = r;
                         firstDataCol = c;
                         break;
@@ -4188,11 +4193,15 @@
             if (headerRowIdx < 0 || firstDataCol < 1) return null;
 
             const headerRow = jsonData[headerRowIdx];
+            const headerRowFmt = jsonFormatted[headerRowIdx] || headerRow;
 
-            // Extract dates from header
+            // Extract dates from header - prefer formatted values which show dates as text
             const dates = [];
             for (let c = firstDataCol; c < headerRow.length; c++) {
-                const val = cellToString(headerRow[c]).trim();
+                // Try formatted value first (Excel shows "16/01/26"), then fall back to raw
+                const valFmt = (headerRowFmt[c] != null) ? String(headerRowFmt[c]).trim() : '';
+                const valRaw = cellToString(headerRow[c]).trim();
+                const val = isDateLike(valFmt) ? valFmt : valRaw;
                 if (val && !val.match(/^[a-z]+$/i)) {
                     dates.push(val);
                 }
@@ -4216,6 +4225,13 @@
                 const row = jsonData[r];
                 if (!row || row.length < 2) continue;
 
+                // Skip rows that are entirely empty or whitespace
+                const rowHasContent = row.some(cell => {
+                    const s = cellToString(cell).trim();
+                    return s !== '' && s !== '-';
+                });
+                if (!rowHasContent) continue;
+
                 // Build treatment name from columns before firstDataCol
                 const nameParts = [];
                 for (let c = 0; c < firstDataCol; c++) {
@@ -4224,6 +4240,9 @@
                 }
                 const name = nameParts.join(' - ');
                 if (!name) continue;
+
+                // Skip rows where the "name" is actually a date (serial date converted to dd.mm.yy)
+                if (isDateLike(name)) continue;
 
                 // Skip statistical rows
                 if (name.match(/^(P|LSD|d\.f\.|%c\.v\.|SED|CV|Grand mean|Mean|s\.e\.|rep\.s\.e\.)$/i)) continue;
@@ -4255,8 +4274,10 @@
                         }
                     } else {
                         // Try parsing as a plain number (Excel might store as number)
+                        // But skip values that look like Excel date serial numbers (> 1000)
+                        // since actual data values in these tables are small numbers
                         const num = parseFloat(raw);
-                        if (!isNaN(num)) {
+                        if (!isNaN(num) && num < 1000) {
                             values.push(num);
                             letters.push('');
                             rowParts.push(raw);
@@ -4265,6 +4286,11 @@
                 }
 
                 if (values.length > 0) {
+                    // Skip rows where values look like Excel date serial numbers
+                    // (all values > 1000 suggests these are serial dates, not real data)
+                    const avgValue = values.reduce((a, b) => a + b, 0) / values.length;
+                    if (avgValue > 1000) continue;
+
                     while (letters.length < values.length) letters.push('');
                     treatments.push({ name, values, letters });
                     rawLines.push(rowParts.join('\t'));
