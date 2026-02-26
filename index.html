@@ -4234,14 +4234,20 @@
 
                 // Build treatment name from columns before firstDataCol
                 const nameParts = [];
+                let nameIsDate = false;
                 for (let c = 0; c < firstDataCol; c++) {
-                    let part = cellToString(row[c]).trim().replace(/^\[\d+\]\s*/, '');
+                    const rawCell = row[c];
+                    // If the name cell is a date serial number or Date object, this row is not a treatment
+                    if (typeof rawCell === 'number' && rawCell > 1000) { nameIsDate = true; break; }
+                    if (rawCell instanceof Date) { nameIsDate = true; break; }
+                    let part = String(rawCell == null ? '' : rawCell).trim().replace(/^\[\d+\]\s*/, '');
                     if (part && part !== '-') nameParts.push(part);
                 }
+                if (nameIsDate) continue;
                 const name = nameParts.join(' - ');
                 if (!name) continue;
 
-                // Skip rows where the "name" is actually a date (serial date converted to dd.mm.yy)
+                // Skip rows where the "name" looks like a date string
                 if (isDateLike(name)) continue;
 
                 // Skip statistical rows
@@ -4252,12 +4258,22 @@
                 const rowParts = [];
 
                 for (let c = 0; c < firstDataCol; c++) {
-                    rowParts.push(cellToString(row[c]).trim());
+                    rowParts.push(String(row[c] == null ? '' : row[c]).trim());
                 }
 
                 for (let c = firstDataCol; c < row.length; c++) {
-                    const raw = cellToString(row[c]).trim();
+                    const rawCell = row[c];
+
+                    // Skip cells that are Excel date serial numbers - these are NOT data
+                    if (typeof rawCell === 'number' && rawCell > 1000) continue;
+                    // Skip cells that are actual Date objects from SheetJS
+                    if (rawCell instanceof Date) continue;
+
+                    const raw = String(rawCell == null ? '' : rawCell).trim();
                     if (!raw) continue;
+
+                    // Skip values that look like dates (dd.mm.yy etc.)
+                    if (isDateLike(raw)) continue;
 
                     const match = raw.match(/^([\d.]+)\s*([a-zA-Z]*)$/);
                     if (match) {
