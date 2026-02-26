@@ -10,6 +10,8 @@
     <!-- Field Map Tool Dependencies -->
     <script src="https://cdn.jsdelivr.net/npm/exif-js@2.3.0/exif.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <!-- Excel file reading -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -1276,6 +1278,148 @@
             }
         }
 
+        /* Excel Import Modal */
+        .excel-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .excel-modal-overlay.active {
+            display: flex;
+        }
+
+        .excel-modal {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 16px;
+            padding: 40px;
+            width: 560px;
+            max-width: 90vw;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .excel-modal h2 {
+            color: #fff;
+            font-size: 1.4em;
+            margin-bottom: 8px;
+        }
+
+        .excel-modal .modal-subtitle {
+            color: rgba(255,255,255,0.5);
+            font-size: 0.85em;
+            margin-bottom: 24px;
+        }
+
+        .excel-drop-zone {
+            border: 2px dashed rgba(99, 102, 241, 0.4);
+            border-radius: 12px;
+            padding: 50px 30px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(99, 102, 241, 0.05);
+            margin-bottom: 20px;
+        }
+
+        .excel-drop-zone:hover,
+        .excel-drop-zone.drag-over {
+            border-color: #6366f1;
+            background: rgba(99, 102, 241, 0.15);
+            transform: scale(1.02);
+        }
+
+        .excel-drop-zone svg {
+            width: 48px;
+            height: 48px;
+            color: #6366f1;
+            margin-bottom: 12px;
+        }
+
+        .excel-drop-zone p {
+            color: rgba(255,255,255,0.7);
+            font-size: 0.95em;
+        }
+
+        .excel-drop-zone .browse-link {
+            color: #6366f1;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        .excel-modal .cancel-btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: rgba(255,255,255,0.6);
+            padding: 8px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.85em;
+            transition: all 0.2s;
+        }
+
+        .excel-modal .cancel-btn:hover {
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+        }
+
+        .excel-progress {
+            display: none;
+            margin-top: 20px;
+        }
+
+        .excel-progress.active {
+            display: block;
+        }
+
+        .excel-progress .progress-bar {
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            height: 8px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .excel-progress .progress-fill {
+            background: linear-gradient(90deg, #6366f1, #10b981);
+            height: 100%;
+            border-radius: 8px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .excel-progress .progress-text {
+            color: rgba(255,255,255,0.6);
+            font-size: 0.8em;
+        }
+
+        .excel-import-btn {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.8em;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .excel-import-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        }
+
     </style>
 </head>
 <body>
@@ -1294,6 +1438,7 @@
         <div class="tab-add" onclick="addNewTab()" title="Add new graph">+</div>
         <div class="tab-count" id="tabCount">0 graphs</div>
         <div class="project-buttons">
+            <button class="excel-import-btn" onclick="openExcelImport()" title="Import Excel file to auto-generate graphs">📊 Import Excel</button>
             <button class="project-btn save-btn" onclick="saveProject()" title="Save Project">💾 Save</button>
             <button class="project-btn load-btn" onclick="document.getElementById('loadFileInput').click()" title="Load Project">📂 Load</button>
             <input type="file" id="loadFileInput" accept=".json" style="display:none" onchange="loadProject(event)">
@@ -1301,6 +1446,27 @@
     </div>
 
     <div id="tabContents"></div>
+
+    <!-- Excel Import Modal -->
+    <div class="excel-modal-overlay" id="excelModalOverlay">
+        <div class="excel-modal">
+            <h2>Import Excel File</h2>
+            <p class="modal-subtitle">Drop an Excel file to auto-scan sheets and generate graphs for each data table</p>
+            <div class="excel-drop-zone" id="excelDropZone">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M9 8V6a2 2 0 012-2h2a2 2 0 012 2v2M9 8H7a2 2 0 00-2 2v8a2 2 0 002 2h10a2 2 0 002-2v-8a2 2 0 00-2-2h-2M9 8h6M12 12v5M10 14l2-2 2 2"/>
+                </svg>
+                <p>Drag & drop your .xlsx or .xls file here</p>
+                <p style="margin-top:8px;">or <span class="browse-link" onclick="document.getElementById('excelFileInput').click()">browse files</span></p>
+                <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" style="display:none">
+            </div>
+            <div class="excel-progress" id="excelProgress">
+                <div class="progress-bar"><div class="progress-fill" id="excelProgressFill"></div></div>
+                <p class="progress-text" id="excelProgressText">Processing...</p>
+            </div>
+            <button class="cancel-btn" onclick="closeExcelImport()">Cancel</button>
+        </div>
+    </div>
 
     <script>
         // Global state
@@ -3784,6 +3950,372 @@
                 }
             });
         }
+
+        // ============================================================
+        // EXCEL IMPORT TOOL
+        // ============================================================
+
+        function openExcelImport() {
+            document.getElementById('excelModalOverlay').classList.add('active');
+            document.getElementById('excelProgress').classList.remove('active');
+        }
+
+        function closeExcelImport() {
+            document.getElementById('excelModalOverlay').classList.remove('active');
+        }
+
+        // Wire up drag-and-drop and file input for the Excel modal
+        (function initExcelImport() {
+            const overlay = document.getElementById('excelModalOverlay');
+            const dropZone = document.getElementById('excelDropZone');
+            const fileInput = document.getElementById('excelFileInput');
+
+            // Close modal when clicking outside the modal box
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) closeExcelImport();
+            });
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('drag-over');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('drag-over');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('drag-over');
+                const file = e.dataTransfer.files[0];
+                if (file) processExcelFile(file);
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) processExcelFile(file);
+                fileInput.value = '';
+            });
+        })();
+
+        function processExcelFile(file) {
+            const progressEl = document.getElementById('excelProgress');
+            const progressFill = document.getElementById('excelProgressFill');
+            const progressText = document.getElementById('excelProgressText');
+
+            progressEl.classList.add('active');
+            progressFill.style.width = '10%';
+            progressText.textContent = 'Reading file...';
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    progressFill.style.width = '30%';
+                    progressText.textContent = 'Parsing workbook...';
+
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+
+                    progressFill.style.width = '50%';
+                    progressText.textContent = 'Scanning sheets for data tables...';
+
+                    const sheetsWithData = [];
+
+                    workbook.SheetNames.forEach(sheetName => {
+                        const sheet = workbook.Sheets[sheetName];
+                        const tableData = extractTableFromSheet(sheet, sheetName);
+                        if (tableData) {
+                            sheetsWithData.push(tableData);
+                        }
+                    });
+
+                    if (sheetsWithData.length === 0) {
+                        progressFill.style.width = '100%';
+                        progressText.textContent = 'No data tables found. Check that sheets have a header row with dates and treatment rows below.';
+                        setTimeout(() => progressEl.classList.remove('active'), 3000);
+                        return;
+                    }
+
+                    progressFill.style.width = '70%';
+                    progressText.textContent = `Found ${sheetsWithData.length} sheet(s) with data. Creating graphs...`;
+
+                    // Remove the default empty tab if it has no data
+                    if (tabs.length === 1 && tabs[0].dates.length === 0 && tabs[0].treatments.length === 0) {
+                        const emptyContent = document.getElementById('content_' + tabs[0].id);
+                        if (emptyContent) emptyContent.remove();
+                        tabs = [];
+                    }
+
+                    // Create a tab for each sheet with data
+                    sheetsWithData.forEach((sheetData, idx) => {
+                        tabCounter++;
+                        const tabId = 'tab_' + tabCounter;
+
+                        // Auto-calculate Y-axis range from data
+                        const allValues = sheetData.treatments.flatMap(t => t.values);
+                        const dataMin = Math.min(...allValues);
+                        const dataMax = Math.max(...allValues);
+
+                        // Determine smart axis bounds
+                        const range = dataMax - dataMin;
+                        const padding = range * 0.15 || 5;
+                        let yMin = Math.floor((dataMin - padding) / 5) * 5;
+                        let yMax = Math.ceil((dataMax + padding) / 5) * 5;
+                        if (yMin < 0) yMin = 0;
+                        if (yMax > 100 && dataMax <= 100) yMax = 100;
+
+                        // Detect if this looks like percentage data
+                        const isPercent = (dataMax <= 100 && dataMin >= 0) || sheetData.sheetName.match(/(%|percent|coverage|green)/i);
+
+                        const tab = {
+                            id: tabId,
+                            name: sheetData.sheetName.substring(0, 25),
+                            data: null,
+                            graphTitle: sheetData.sheetName,
+                            yAxisLabel: isPercent ? 'Value (%)' : 'Value',
+                            xAxisLabel: 'Assessment Date',
+                            yAxisMin: yMin,
+                            yAxisMax: yMax,
+                            yAxisPercent: !!isPercent,
+                            treatments: sheetData.treatments,
+                            dates: sheetData.dates,
+                            currentDateIndex: 0,
+                            legendAscending: true
+                        };
+
+                        tabs.push(tab);
+                        renderTabs();
+                        createTabContent(tab);
+
+                        // Set graph config inputs to match auto-calculated values
+                        const titleInput = document.getElementById('graphTitle_' + tabId);
+                        const yMinInput = document.getElementById('yAxisMin_' + tabId);
+                        const yMaxInput = document.getElementById('yAxisMax_' + tabId);
+                        const yLabelInput = document.getElementById('yAxisLabel_' + tabId);
+                        const percentBtn = document.getElementById('yAxisPercent_' + tabId);
+
+                        if (titleInput) titleInput.value = tab.graphTitle;
+                        if (yMinInput) yMinInput.value = tab.yAxisMin;
+                        if (yMaxInput) yMaxInput.value = tab.yAxisMax;
+                        if (yLabelInput) yLabelInput.value = tab.yAxisLabel;
+                        if (percentBtn && !isPercent) percentBtn.classList.remove('active');
+
+                        // Populate the textarea with tab-separated data for reference
+                        const textarea = document.getElementById('dataInput_' + tabId);
+                        if (textarea) {
+                            textarea.value = sheetData.rawText;
+                            textarea.disabled = false;
+                            textarea.classList.remove('locked');
+                        }
+
+                        // Generate the graph
+                        createGraph(tabId);
+                        updateLegend(tabId, 0);
+                        updateNavigation(tabId);
+                        addTimelineLine(tabId, 0);
+
+                        // Update status
+                        const statusEl = document.getElementById('status_' + tabId);
+                        if (statusEl) {
+                            statusEl.className = 'status success';
+                            statusEl.textContent = `Loaded ${tab.treatments.length} treatments across ${tab.dates.length} dates (from Excel)`;
+                        }
+
+                        const pct = 70 + ((idx + 1) / sheetsWithData.length) * 25;
+                        progressFill.style.width = pct + '%';
+                        progressText.textContent = `Created graph for "${sheetData.sheetName}"`;
+                    });
+
+                    // Switch to first new tab
+                    if (sheetsWithData.length > 0) {
+                        const firstNewTab = tabs[tabs.length - sheetsWithData.length];
+                        if (firstNewTab) switchToTab(firstNewTab.id);
+                    }
+
+                    updateTabCount();
+                    autoSave();
+
+                    progressFill.style.width = '100%';
+                    progressText.textContent = `Done! Created ${sheetsWithData.length} graph(s) from "${file.name}"`;
+
+                    // Update project name from filename
+                    const baseName = file.name.replace(/\.(xlsx|xls|csv)$/i, '');
+                    if (projectName === 'Untitled Project') {
+                        projectName = baseName;
+                        document.getElementById('projectTitle').textContent = projectName;
+                    }
+
+                    setTimeout(() => closeExcelImport(), 1500);
+
+                } catch (err) {
+                    console.error('Excel import error:', err);
+                    progressFill.style.width = '100%';
+                    progressText.textContent = 'Error: ' + err.message;
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        /**
+         * Extract a data table from an Excel sheet.
+         * Scans for a header row containing dates (dd.mm.yy, dd/mm/yy, etc.)
+         * and treatment rows below it. Returns null if no valid table found.
+         */
+        function extractTableFromSheet(sheet, sheetName) {
+            const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+            if (!jsonData || jsonData.length < 2) return null;
+
+            // Find the header row - the one that contains date-like values
+            let headerRowIdx = -1;
+            let firstDataCol = -1;
+
+            for (let r = 0; r < Math.min(jsonData.length, 15); r++) {
+                const row = jsonData[r];
+                if (!row || row.length < 2) continue;
+
+                for (let c = 0; c < row.length; c++) {
+                    const val = cellToString(row[c]).trim();
+                    if (isDateLike(val)) {
+                        headerRowIdx = r;
+                        firstDataCol = c;
+                        break;
+                    }
+                }
+                if (headerRowIdx >= 0) break;
+            }
+
+            if (headerRowIdx < 0 || firstDataCol < 1) return null;
+
+            const headerRow = jsonData[headerRowIdx];
+
+            // Extract dates from header
+            const dates = [];
+            for (let c = firstDataCol; c < headerRow.length; c++) {
+                const val = cellToString(headerRow[c]).trim();
+                if (val && !val.match(/^[a-z]+$/i)) {
+                    dates.push(val);
+                }
+            }
+
+            if (dates.length === 0) return null;
+
+            // Extract treatments from rows below header
+            const treatments = [];
+            const rawLines = [];
+
+            // Build header line for raw text
+            const headerParts = [];
+            for (let c = 0; c < firstDataCol; c++) {
+                headerParts.push(cellToString(headerRow[c]).trim() || 'Treatment');
+            }
+            headerParts.push(...dates);
+            rawLines.push(headerParts.join('\t'));
+
+            for (let r = headerRowIdx + 1; r < jsonData.length; r++) {
+                const row = jsonData[r];
+                if (!row || row.length < 2) continue;
+
+                // Build treatment name from columns before firstDataCol
+                const nameParts = [];
+                for (let c = 0; c < firstDataCol; c++) {
+                    let part = cellToString(row[c]).trim().replace(/^\[\d+\]\s*/, '');
+                    if (part && part !== '-') nameParts.push(part);
+                }
+                const name = nameParts.join(' - ');
+                if (!name) continue;
+
+                // Skip statistical rows
+                if (name.match(/^(P|LSD|d\.f\.|%c\.v\.|SED|CV|Grand mean|Mean|s\.e\.|rep\.s\.e\.)$/i)) continue;
+
+                const values = [];
+                const letters = [];
+                const rowParts = [];
+
+                for (let c = 0; c < firstDataCol; c++) {
+                    rowParts.push(cellToString(row[c]).trim());
+                }
+
+                for (let c = firstDataCol; c < row.length; c++) {
+                    const raw = cellToString(row[c]).trim();
+                    if (!raw) continue;
+
+                    const match = raw.match(/^([\d.]+)\s*([a-zA-Z]*)$/);
+                    if (match) {
+                        const num = parseFloat(match[1]);
+                        if (!isNaN(num)) {
+                            values.push(num);
+                            letters.push(match[2] || '');
+                            rowParts.push(raw);
+                        }
+                    } else if (raw.match(/^[a-zA-Z]+$/)) {
+                        // Standalone letter group
+                        if (letters.length > 0 && letters[letters.length - 1] === '') {
+                            letters[letters.length - 1] = raw;
+                        }
+                    } else {
+                        // Try parsing as a plain number (Excel might store as number)
+                        const num = parseFloat(raw);
+                        if (!isNaN(num)) {
+                            values.push(num);
+                            letters.push('');
+                            rowParts.push(raw);
+                        }
+                    }
+                }
+
+                if (values.length > 0) {
+                    while (letters.length < values.length) letters.push('');
+                    treatments.push({ name, values, letters });
+                    rawLines.push(rowParts.join('\t'));
+                }
+            }
+
+            if (treatments.length === 0 || dates.length === 0) return null;
+
+            return {
+                sheetName,
+                dates,
+                treatments,
+                rawText: rawLines.join('\n')
+            };
+        }
+
+        /** Convert an Excel cell value to a string, handling dates and numbers */
+        function cellToString(val) {
+            if (val === null || val === undefined) return '';
+            if (typeof val === 'number') {
+                // Check if it might be an Excel serial date (> 30000 is likely a date after ~1982)
+                if (val > 30000 && val < 60000) {
+                    try {
+                        const date = XLSX.SSF.parse_date_code(val);
+                        if (date) {
+                            const dd = String(date.d).padStart(2, '0');
+                            const mm = String(date.m).padStart(2, '0');
+                            const yy = String(date.y).slice(-2);
+                            return `${dd}.${mm}.${yy}`;
+                        }
+                    } catch (e) { /* fall through */ }
+                }
+                return String(val);
+            }
+            return String(val);
+        }
+
+        /** Check if a string looks like a date (dd.mm.yy, dd/mm/yy, etc.) */
+        function isDateLike(val) {
+            if (!val) return false;
+            return !!(
+                val.match(/^\d{1,2}[.\/-]\d{1,2}[.\/-]\d{2,4}$/) ||
+                val.match(/^\d+DAT/i) ||
+                val.match(/^\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i) ||
+                val.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d/i)
+            );
+        }
+
+        // ============================================================
+        // END EXCEL IMPORT TOOL
+        // ============================================================
 
         // Handle window resize
         window.addEventListener('resize', () => {
