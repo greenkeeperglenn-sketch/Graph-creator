@@ -874,6 +874,56 @@
             border-color: rgba(16, 185, 129, 0.4);
             color: #10b981;
         }
+
+        /* Drop zone in input panel */
+        .excel-dropzone {
+            min-height: 90px;
+            border: 2px dashed rgba(16, 185, 129, 0.3);
+            border-radius: 10px;
+            background: rgba(16, 185, 129, 0.04);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+
+        .excel-dropzone:hover {
+            border-color: rgba(16, 185, 129, 0.5);
+            background: rgba(16, 185, 129, 0.08);
+        }
+
+        .excel-dropzone.dragover {
+            border-color: #10b981;
+            background: rgba(16, 185, 129, 0.15);
+            border-style: solid;
+            transform: scale(1.02);
+        }
+
+        .excel-dropzone svg {
+            width: 28px;
+            height: 28px;
+            color: rgba(16, 185, 129, 0.6);
+            transition: color 0.2s;
+        }
+
+        .excel-dropzone:hover svg {
+            color: #10b981;
+        }
+
+        .excel-dropzone .dropzone-text {
+            font-size: 0.72em;
+            font-weight: 600;
+            color: rgba(16, 185, 129, 0.7);
+        }
+
+        .excel-dropzone .dropzone-hint {
+            font-size: 0.62em;
+            color: rgba(255,255,255,0.3);
+        }
     </style>
 </head>
 <body>
@@ -1208,6 +1258,22 @@
                                     <input type="number" id="yAxisMax_${tab.id}" value="100" placeholder="100">
                                 </div>
                             </div>
+                            <div class="input-group">
+                                <label>Drop Excel File</label>
+                                <div class="excel-dropzone" id="excelDropzone_${tab.id}"
+                                     onclick="document.getElementById('excelInput_${tab.id}').click()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                        <polyline points="14 2 14 8 20 8"/>
+                                        <line x1="12" y1="18" x2="12" y2="12"/>
+                                        <polyline points="9 15 12 12 15 15"/>
+                                    </svg>
+                                    <span class="dropzone-text">Drag & drop .xlsx here</span>
+                                    <span class="dropzone-hint">or click to browse</span>
+                                </div>
+                                <input type="file" id="excelInput_${tab.id}" accept=".xlsx,.xls,.csv" style="display:none"
+                                       onchange="handleExcelFile(this.files[0]); this.value=''">
+                            </div>
                             <div class="input-group" style="flex:1;">
                                 <label>Paste Data (from Excel/GenStat)</label>
                                 <div class="password-overlay" id="passwordOverlay_${tab.id}">
@@ -1281,6 +1347,34 @@
                     parseAndPlot(tabId);
                 }
             });
+
+            // Wire up the per-tab Excel dropzone
+            const dropzone = document.getElementById('excelDropzone_' + tabId);
+            if (dropzone) {
+                dropzone.addEventListener('dragenter', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropzone.classList.add('dragover');
+                });
+                dropzone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+                dropzone.addEventListener('dragleave', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropzone.classList.remove('dragover');
+                });
+                dropzone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropzone.classList.remove('dragover');
+                    const file = e.dataTransfer.files[0];
+                    if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.csv'))) {
+                        handleExcelFile(file);
+                    }
+                });
+            }
         }
 
         function switchToTab(tabId) {
