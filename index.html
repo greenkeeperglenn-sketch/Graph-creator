@@ -16,7 +16,7 @@
             background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
             color: #e0e0e0;
             height: 100vh;
-            overflow: hidden;
+            overflow: auto;
             display: flex;
             flex-direction: column;
         }
@@ -226,7 +226,7 @@
             padding: 20px 30px;
             gap: 20px;
             min-height: 0;
-            overflow: hidden;
+            overflow: auto;
         }
 
         /* Input Panel */
@@ -544,7 +544,7 @@
             backdrop-filter: blur(20px);
             border-radius: 16px;
             border: 1px solid rgba(255,255,255,0.08);
-            overflow: hidden;
+            overflow: auto;
         }
 
         .graph-panel {
@@ -557,6 +557,7 @@
         }
 
         .graph-plot {
+            flex: 1;
             width: 100%;
             min-height: 300px;
             flex-shrink: 0;
