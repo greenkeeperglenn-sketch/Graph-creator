@@ -1974,8 +1974,9 @@
                     
                     if (!name) continue;
                     
-                    // Skip statistical rows
-                    if (name.match(/^(P|LSD|d\.f\.|%c\.v\.|SED|CV)$/i)) continue;
+                    // Skip statistical rows and DAT header rows
+                    if (name.match(/^(P|LSD|d\.f\.|%c\.v\.|SED|CV|DAT)$/i)) continue;
+                    if (name.split(/\s*-\s*/).every(p => /^\d*DAT\d*$/i.test(p))) continue;
 
                     const values = [];
                     const letters = [];
@@ -1989,7 +1990,7 @@
                         }
                         
                         // Try to match number with optional letter group (e.g., "45.2a" or "45.2 ab" or just "45.2")
-                        const match = cell.match(/^([\d.]+)\s*([a-zA-Z]*)$/);
+                        const match = cell.match(/^(\d+\.?\d*)\s*([a-zA-Z]*)$/);
                         
                         if (match) {
                             const num = parseFloat(match[1]);
