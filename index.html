@@ -861,6 +861,108 @@
             background: rgba(99, 102, 241, 0.08);
         }
 
+        /* Report mode toggle */
+        .report-toggle {
+            font-size: 0.62em;
+            padding: 4px 12px;
+            border-radius: 20px;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            background: rgba(245, 158, 11, 0.06);
+            color: rgba(245, 158, 11, 0.6);
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+            margin-left: auto;
+        }
+
+        .report-toggle:hover {
+            background: rgba(245, 158, 11, 0.15);
+            border-color: rgba(245, 158, 11, 0.5);
+            color: #f59e0b;
+        }
+
+        .report-toggle.active {
+            background: rgba(245, 158, 11, 0.2);
+            border-color: rgba(245, 158, 11, 0.6);
+            color: #fbbf24;
+            font-weight: 600;
+        }
+
+        /* Report table */
+        .report-table-wrapper {
+            display: none;
+            background: #1a1a2e;
+            border-radius: 0 0 16px 16px;
+            padding: 16px 20px 20px;
+            overflow-x: auto;
+        }
+
+        .report-table-wrapper.visible {
+            display: block;
+        }
+
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.7em;
+        }
+
+        .report-table caption {
+            text-align: left;
+            font-size: 1.1em;
+            font-weight: 700;
+            color: rgba(255,255,255,0.85);
+            padding-bottom: 8px;
+        }
+
+        .report-table th {
+            background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.7);
+            font-weight: 600;
+            padding: 6px 10px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.08);
+            white-space: nowrap;
+        }
+
+        .report-table th:first-child {
+            text-align: left;
+            min-width: 140px;
+        }
+
+        .report-table td {
+            padding: 5px 10px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.65);
+        }
+
+        .report-table td:first-child {
+            text-align: left;
+            font-weight: 600;
+            color: rgba(255,255,255,0.8);
+        }
+
+        .report-table tr:nth-child(even) {
+            background: rgba(255,255,255,0.02);
+        }
+
+        .report-table .letter-cell {
+            font-size: 0.85em;
+            color: rgba(255,255,255,0.4);
+            font-style: italic;
+        }
+
+        /* Report container for screenshot */
+        .report-screenshot-wrapper {
+            display: none;
+        }
+
+        .report-screenshot-wrapper.visible {
+            display: block;
+        }
+
         .no-select { user-select: none; }
 
         /* Empty state */
@@ -1197,9 +1299,10 @@
                     treatments: savedTab.treatments || [],
                     dates: savedTab.dates || [],
                     currentDateIndex: 0,
-                    legendAscending: true
+                    legendAscending: true,
+                    reportMode: false
                 };
-                
+
                 tabs.push(tab);
                 createTabContent(tab);
                 
@@ -1262,7 +1365,8 @@
                 treatments: [],
                 dates: [],
                 currentDateIndex: 0,
-                legendAscending: true
+                legendAscending: true,
+                reportMode: false
             };
 
             tabs.push(tab);
@@ -1408,7 +1512,9 @@
                             <input type="text" class="preset-other-input" id="presetOther_${tab.id}" placeholder="Label (unit)"
                                    onkeyup="if(event.key==='Enter')applyCustomPreset('${tab.id}')"
                                    onblur="applyCustomPreset('${tab.id}')">
+                            <button class="report-toggle" id="reportToggle_${tab.id}" onclick="toggleReportMode('${tab.id}')">Report Mode</button>
                         </div>
+                        <div class="report-table-wrapper" id="reportTable_${tab.id}"></div>
                     </div>
                 </div>
             `;
@@ -1547,6 +1653,59 @@
             if (tab) {
                 tab.yAxisLabel = val;
             }
+        }
+
+        function toggleReportMode(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab) return;
+
+            tab.reportMode = !tab.reportMode;
+            const btn = document.getElementById('reportToggle_' + tabId);
+            btn.classList.toggle('active', tab.reportMode);
+
+            if (tab.dates.length > 0) {
+                createGraph(tabId);
+                if (tab.reportMode) {
+                    buildReportTable(tabId);
+                } else {
+                    const tableEl = document.getElementById('reportTable_' + tabId);
+                    tableEl.classList.remove('visible');
+                    tableEl.innerHTML = '';
+                }
+            }
+        }
+
+        function buildReportTable(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab || !tab.treatments.length) return;
+
+            const tableEl = document.getElementById('reportTable_' + tabId);
+            const suffix = tab.yAxisPercent ? '%' : '';
+
+            let html = '<table class="report-table">';
+            html += `<caption>${tab.graphTitle} — Data Summary</caption>`;
+
+            // Header row: Treatment | Date1 | Date2 | ...
+            html += '<thead><tr><th>Treatment</th>';
+            tab.dates.forEach(d => {
+                html += `<th>${d}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            // One row per treatment (original order)
+            tab.treatments.forEach(t => {
+                html += `<tr><td>${t.name}</td>`;
+                t.values.forEach((v, di) => {
+                    const val = (typeof v === 'number') ? v.toFixed(1) : '-';
+                    const letter = (t.letters && t.letters[di]) ? t.letters[di] : '';
+                    html += `<td>${val}${suffix}${letter ? ' <span class="letter-cell">' + letter + '</span>' : ''}</td>`;
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            tableEl.innerHTML = html;
+            tableEl.classList.add('visible');
         }
 
         function checkPassword(tabId) {
@@ -1755,18 +1914,24 @@
             const plotEl = document.getElementById('graphPlot_' + tabId);
             plotEl.innerHTML = '';
 
+            const isReport = !!tab.reportMode;
             const tickSuffix = tab.yAxisPercent ? '%' : '';
             const hoverSuffix = tab.yAxisPercent ? '%' : '';
+            const lineShape = isReport ? 'linear' : 'spline';
 
             const traces = tab.treatments.map((t, i) => ({
                 x: tab.dates,
                 y: t.values,
                 mode: 'lines+markers',
                 name: t.name,
-                line: { color: colors[i % colors.length], width: 3, shape: 'spline' },
+                line: { color: colors[i % colors.length], width: 3, shape: lineShape },
                 marker: { size: 8, color: colors[i % colors.length] },
                 hovertemplate: '<b>' + t.name + '</b><br>%{x}<br>%{y:.1f}' + hoverSuffix + '<extra></extra>'
             }));
+
+            const legendCfg = isReport
+                ? { showlegend: true, legend: { font: { size: 10, color: 'rgba(255,255,255,0.7)', family: 'Montserrat, sans-serif' }, bgcolor: 'rgba(0,0,0,0)', borderwidth: 0, orientation: 'h', x: 0.5, xanchor: 'center', y: -0.22, yanchor: 'top', traceorder: 'normal' } }
+                : { showlegend: false };
 
             Plotly.newPlot(plotEl, traces, {
                 title: { text: tab.graphTitle, font: { size: 28, color: 'rgba(255,255,255,0.95)', family: 'Montserrat, sans-serif', weight: 700 }, x: 0.5, xanchor: 'center', y: 0.95, yanchor: 'top' },
@@ -1774,8 +1939,8 @@
                 yaxis: { title: { text: tab.yAxisLabel, font: { size: 12, color: 'rgba(255,255,255,0.6)', family: 'Montserrat, sans-serif' } }, range: [tab.yAxisMin, tab.yAxisMax], showgrid: true, gridcolor: 'rgba(255,255,255,0.05)', tickfont: { size: 10, color: 'rgba(255,255,255,0.5)', family: 'Montserrat, sans-serif' }, ticksuffix: tickSuffix },
                 plot_bgcolor: 'rgba(0,0,0,0)',
                 paper_bgcolor: 'rgba(0,0,0,0)',
-                showlegend: false,
-                margin: { l: 55, r: 20, t: 60, b: 80 },
+                ...legendCfg,
+                margin: { l: 55, r: 20, t: 60, b: isReport ? 100 : 80 },
                 autosize: true,
                 images: [{
                     source: logoPath,
@@ -2014,11 +2179,11 @@
             btn.textContent = '⏳ Copying...';
             btn.classList.add('copying');
 
+            const isReport = !!tab.reportMode;
+
             try {
                 // Wait for fonts to be ready
                 await document.fonts.ready;
-
-                // Additional delay to ensure fonts are fully loaded
                 await new Promise(resolve => setTimeout(resolve, 200));
 
                 // Get the resizable container (graph + legend)
@@ -2036,11 +2201,16 @@
                 // Apply fixed dimensions for consistent output
                 container.style.width = '1200px';
                 container.style.height = '600px';
-                // Make background solid for screenshot (matches the semi-transparent grey)
                 container.style.background = '#1a1a2e';
                 legendPanel.style.width = '300px';
                 legendPanel.style.minWidth = '300px';
                 divider.style.display = 'none';
+
+                // In report mode: hide legend panel, use full width for graph
+                const originalLegendDisplay = legendPanel.style.display;
+                if (isReport) {
+                    legendPanel.style.display = 'none';
+                }
 
                 // Resize Plotly chart to fit new dimensions
                 await new Promise(resolve => {
@@ -2050,23 +2220,52 @@
 
                 // Re-add timeline line at correct position
                 addTimelineLine(tabId, tab.currentDateIndex);
-
-                // Longer delay to ensure fonts and rendering are complete
                 await new Promise(resolve => setTimeout(resolve, 300));
 
-                // Capture the container with html2canvas (better font support)
-                const canvas = await html2canvas(container, {
-                    backgroundColor: null, // Transparent so we only get the container
-                    scale: 2, // Higher resolution
+                let captureTarget;
+                let reportWrapper;
+
+                if (isReport) {
+                    // Build a temporary wrapper containing graph + table for capture
+                    reportWrapper = document.createElement('div');
+                    reportWrapper.style.cssText = 'width:1200px;background:#1a1a2e;border-radius:16px;overflow:hidden;';
+
+                    // Clone graph container
+                    const graphClone = container.cloneNode(true);
+                    graphClone.style.borderRadius = '16px 16px 0 0';
+                    reportWrapper.appendChild(graphClone);
+
+                    // Clone table
+                    const tableEl = document.getElementById('reportTable_' + tabId);
+                    if (tableEl && tableEl.innerHTML) {
+                        const tableClone = tableEl.cloneNode(true);
+                        tableClone.style.display = 'block';
+                        tableClone.style.borderRadius = '0 0 16px 16px';
+                        reportWrapper.appendChild(tableClone);
+                    }
+
+                    document.body.appendChild(reportWrapper);
+                    captureTarget = reportWrapper;
+                } else {
+                    captureTarget = container;
+                }
+
+                const canvas = await html2canvas(captureTarget, {
+                    backgroundColor: null,
+                    scale: 2,
                     useCORS: true,
                     allowTaint: true,
                     logging: false
                 });
 
-                // Convert canvas to blob
                 const blob = await new Promise(resolve => {
                     canvas.toBlob(resolve, 'image/png');
                 });
+
+                // Clean up report wrapper
+                if (reportWrapper) {
+                    document.body.removeChild(reportWrapper);
+                }
 
                 // Restore original styles
                 container.style.width = originalWidth;
@@ -2075,6 +2274,7 @@
                 legendPanel.style.width = originalLegendWidth;
                 legendPanel.style.minWidth = '';
                 divider.style.display = originalDividerDisplay;
+                legendPanel.style.display = originalLegendDisplay;
 
                 // Resize back to normal
                 Plotly.Plots.resize('graphPlot_' + tabId);
@@ -2095,14 +2295,13 @@
                 console.error('Screenshot failed:', err);
                 btn.textContent = '✗ Failed';
                 btn.classList.remove('copying');
-                
-                // Provide helpful error message
+
                 if (err.name === 'NotAllowedError') {
                     alert('Clipboard access denied. Please allow clipboard permissions or use HTTPS.');
                 } else {
                     alert('Screenshot failed: ' + err.message);
                 }
-                
+
                 setTimeout(() => {
                     btn.textContent = originalText;
                 }, 2000);
@@ -2208,7 +2407,8 @@
                             treatments: [],
                             dates: [],
                             currentDateIndex: 0,
-                            legendAscending: true
+                            legendAscending: true,
+                            reportMode: false
                         };
 
                         tabs.push(tab);
