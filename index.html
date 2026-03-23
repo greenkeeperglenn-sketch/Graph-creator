@@ -1431,7 +1431,7 @@
             container.innerHTML = tabs.map(tab => `
                 <div class="tab ${tab.id === activeTabId ? 'active' : ''}" onclick="switchToTab('${tab.id}')">
                     <span class="tab-name" ondblclick="renameTab('${tab.id}', this)">${tab.name}</span>
-                    ${tabs.length > 1 ? `<span class="tab-close" onclick="event.stopPropagation(); closeTab('${tab.id}')">×</span>` : ''}
+                    <span class="tab-close" onclick="event.stopPropagation(); closeTab('${tab.id}')">×</span>
                 </div>
             `).join('');
         }
@@ -1784,21 +1784,66 @@
         }
 
         function closeTab(tabId) {
-            if (tabs.length <= 1) return;
-            
+            if (tabs.length <= 1) {
+                // Last tab — reset it to blank instead of removing
+                const tab = tabs[0];
+                tab.data = null;
+                tab.graphTitle = 'Trial Results';
+                tab.yAxisLabel = 'Green Coverage (%)';
+                tab.xAxisLabel = 'Assessment Date';
+                tab.yAxisMin = 0;
+                tab.yAxisMax = 100;
+                tab.yAxisPercent = true;
+                tab.treatments = [];
+                tab.dates = [];
+                tab.currentDateIndex = 0;
+                tab.legendAscending = true;
+                tab.reportMode = false;
+                tab.chartType = 'line';
+                tab.hiddenTreatments = new Set();
+
+                // Reset the UI fields
+                const dataInput = document.getElementById('dataInput_' + tab.id);
+                if (dataInput) dataInput.value = '';
+                const titleInput = document.getElementById('graphTitle_' + tab.id);
+                if (titleInput) titleInput.value = 'Trial Results';
+                const yLabel = document.getElementById('yAxisLabel_' + tab.id);
+                if (yLabel) yLabel.value = 'Green Coverage (%)';
+                const xLabel = document.getElementById('xAxisLabel_' + tab.id);
+                if (xLabel) xLabel.value = 'Assessment Date';
+                const yMin = document.getElementById('yAxisMin_' + tab.id);
+                if (yMin) yMin.value = '0';
+                const yMax = document.getElementById('yAxisMax_' + tab.id);
+                if (yMax) yMax.value = '100';
+
+                // Clear the graph and report table
+                const plotEl = document.getElementById('plot_' + tab.id);
+                if (plotEl) Plotly.purge(plotEl);
+                const tableEl = document.getElementById('reportTable_' + tab.id);
+                if (tableEl) { tableEl.innerHTML = ''; tableEl.classList.remove('visible'); }
+
+                const statusEl = document.getElementById('status_' + tab.id);
+                if (statusEl) { statusEl.textContent = ''; statusEl.className = 'status'; }
+
+                renderTabs();
+                updateTabCount();
+                autoSave();
+                return;
+            }
+
             const idx = tabs.findIndex(t => t.id === tabId);
             tabs.splice(idx, 1);
-            
+
             document.getElementById('content_' + tabId)?.remove();
-            
+
             if (activeTabId === tabId) {
                 const newIdx = Math.min(idx, tabs.length - 1);
                 switchToTab(tabs[newIdx].id);
             }
-            
+
             renderTabs();
             updateTabCount();
-            
+
             autoSave();
         }
 
