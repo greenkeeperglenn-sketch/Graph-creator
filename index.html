@@ -2127,15 +2127,6 @@
                 }]
             }, { responsive: true, displayModeBar: false });
 
-            plotEl.on('plotly_hover', function(data) {
-                const pointIndex = data.points[0].pointNumber;
-                if (pointIndex !== tab.currentDateIndex) {
-                    tab.currentDateIndex = pointIndex;
-                    updateLegend(tabId, pointIndex);
-                    updateNavigation(tabId);
-                    addTimelineLine(tabId, pointIndex);
-                }
-            });
         }
 
         function addTimelineLine(tabId, dateIndex) {
