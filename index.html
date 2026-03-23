@@ -1997,7 +1997,7 @@
             });
 
             const legendCfg = isReport
-                ? { showlegend: true, legend: { font: { size: 10, color: 'rgba(255,255,255,0.7)', family: 'Montserrat, sans-serif' }, bgcolor: 'rgba(0,0,0,0)', borderwidth: 0, orientation: 'h', x: 0.5, xanchor: 'center', y: -0.22, yanchor: 'top', traceorder: 'normal' } }
+                ? { showlegend: true, legend: { font: { size: 10, color: 'rgba(255,255,255,0.7)', family: 'Montserrat, sans-serif' }, bgcolor: 'rgba(0,0,0,0)', borderwidth: 0, orientation: 'v', x: 1.02, xanchor: 'left', y: 1, yanchor: 'top', traceorder: 'normal' } }
                 : { showlegend: false };
 
             const barLayout = isBar ? { barmode: 'group', bargap: 0.15, bargroupgap: 0.1 } : {};
@@ -2010,7 +2010,7 @@
                 paper_bgcolor: 'rgba(0,0,0,0)',
                 ...legendCfg,
                 ...barLayout,
-                margin: { l: 55, r: 20, t: 60, b: isReport ? 100 : 80 },
+                margin: { l: 55, r: isReport ? 180 : 20, t: 60, b: 80 },
                 autosize: true,
                 images: [{
                     source: logoPath,
@@ -2354,7 +2354,8 @@
                         'yaxis.title.font.size': 16,
                         'yaxis.gridcolor': 'rgba(0,0,0,0.1)',
                         'legend.font.color': '#333333',
-                        'legend.font.size': 14
+                        'legend.font.size': 14,
+                        'margin.r': 200
                     });
 
                     await new Promise(resolve => {
@@ -2465,7 +2466,8 @@
                         'yaxis.title.font.size': 12,
                         'yaxis.gridcolor': 'rgba(255,255,255,0.05)',
                         'legend.font.color': 'rgba(255,255,255,0.7)',
-                        'legend.font.size': 10
+                        'legend.font.size': 10,
+                        'margin.r': 180
                     });
 
                     // 3. Stitch graph + table onto landscape canvas with border
