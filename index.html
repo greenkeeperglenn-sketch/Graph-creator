@@ -988,10 +988,15 @@
             background: rgba(255,255,255,0.02);
         }
 
+        .report-table .cell-value {
+            line-height: 1.2;
+        }
+
         .report-table .letter-cell {
             font-size: 0.85em;
             color: rgba(255,255,255,0.4);
             font-style: italic;
+            line-height: 1.2;
         }
 
         /* Report container for screenshot */
@@ -1743,7 +1748,7 @@
                 t.values.forEach((v, di) => {
                     const val = (typeof v === 'number') ? v.toFixed(1) : '-';
                     const letter = (t.letters && t.letters[di]) ? t.letters[di] : '';
-                    html += `<td>${val}${suffix}${letter ? ' <span class="letter-cell">' + letter + '</span>' : ''}</td>`;
+                    html += `<td><div class="cell-value">${val}${suffix}</div>${letter ? '<div class="letter-cell">' + letter + '</div>' : ''}</td>`;
                 });
                 html += '</tr>';
             });
