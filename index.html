@@ -2182,14 +2182,11 @@
             const isReport = !!tab.reportMode;
 
             try {
-                // Wait for fonts to be ready
                 await document.fonts.ready;
                 await new Promise(resolve => setTimeout(resolve, 200));
 
-                // Get the resizable container (graph + legend)
                 const container = document.querySelector('#content_' + tabId + ' .resizable-container');
 
-                // Store original styles
                 const originalWidth = container.style.width;
                 const originalHeight = container.style.height;
                 const originalBackground = container.style.background;
@@ -2197,93 +2194,123 @@
                 const originalLegendWidth = legendPanel.style.width;
                 const divider = container.querySelector('.divider');
                 const originalDividerDisplay = divider.style.display;
+                const originalLegendDisplay = legendPanel.style.display;
 
-                // Apply fixed dimensions for consistent output
                 container.style.width = '1200px';
                 container.style.height = '600px';
                 container.style.background = '#1a1a2e';
-                legendPanel.style.width = '300px';
-                legendPanel.style.minWidth = '300px';
                 divider.style.display = 'none';
 
-                // In report mode: hide legend panel, use full width for graph
-                const originalLegendDisplay = legendPanel.style.display;
                 if (isReport) {
                     legendPanel.style.display = 'none';
+                } else {
+                    legendPanel.style.width = '300px';
+                    legendPanel.style.minWidth = '300px';
                 }
 
-                // Resize Plotly chart to fit new dimensions
                 await new Promise(resolve => {
                     Plotly.Plots.resize('graphPlot_' + tabId);
                     setTimeout(resolve, 200);
                 });
-
-                // Re-add timeline line at correct position
                 addTimelineLine(tabId, tab.currentDateIndex);
                 await new Promise(resolve => setTimeout(resolve, 300));
 
-                let captureTarget;
-                let reportWrapper;
-
                 if (isReport) {
-                    // Build a temporary wrapper containing graph + table for capture
-                    reportWrapper = document.createElement('div');
-                    reportWrapper.style.cssText = 'width:1200px;background:#1a1a2e;border-radius:16px;overflow:hidden;';
+                    // --- Report mode: graph image + table rendered onto a single canvas ---
+                    // 1. Capture graph area via html2canvas
+                    const graphCanvas = await html2canvas(container, {
+                        backgroundColor: '#1a1a2e',
+                        scale: 2,
+                        useCORS: true,
+                        allowTaint: true,
+                        logging: false
+                    });
 
-                    // Clone graph container
-                    const graphClone = container.cloneNode(true);
-                    graphClone.style.borderRadius = '16px 16px 0 0';
-                    reportWrapper.appendChild(graphClone);
-
-                    // Clone table
+                    // 2. Capture the data table
                     const tableEl = document.getElementById('reportTable_' + tabId);
+                    let tableCanvas = null;
                     if (tableEl && tableEl.innerHTML) {
-                        const tableClone = tableEl.cloneNode(true);
-                        tableClone.style.display = 'block';
-                        tableClone.style.borderRadius = '0 0 16px 16px';
-                        reportWrapper.appendChild(tableClone);
+                        // Temporarily make table fixed-width for capture
+                        const origTableWidth = tableEl.style.width;
+                        tableEl.style.width = '1200px';
+                        tableCanvas = await html2canvas(tableEl, {
+                            backgroundColor: '#1a1a2e',
+                            scale: 2,
+                            useCORS: true,
+                            allowTaint: true,
+                            logging: false
+                        });
+                        tableEl.style.width = origTableWidth;
                     }
 
-                    document.body.appendChild(reportWrapper);
-                    captureTarget = reportWrapper;
+                    // 3. Stitch them together on a final canvas
+                    const gw = graphCanvas.width;
+                    const gh = graphCanvas.height;
+                    const tw = tableCanvas ? tableCanvas.width : 0;
+                    const th = tableCanvas ? tableCanvas.height : 0;
+                    const finalWidth = Math.max(gw, tw);
+                    const finalHeight = gh + th;
+
+                    const finalCanvas = document.createElement('canvas');
+                    finalCanvas.width = finalWidth;
+                    finalCanvas.height = finalHeight;
+                    const ctx = finalCanvas.getContext('2d');
+                    ctx.fillStyle = '#1a1a2e';
+                    ctx.fillRect(0, 0, finalWidth, finalHeight);
+                    ctx.drawImage(graphCanvas, 0, 0);
+                    if (tableCanvas) {
+                        ctx.drawImage(tableCanvas, 0, gh);
+                    }
+
+                    const blob = await new Promise(resolve => {
+                        finalCanvas.toBlob(resolve, 'image/png');
+                    });
+
+                    // Restore
+                    container.style.width = originalWidth;
+                    container.style.height = originalHeight;
+                    container.style.background = originalBackground;
+                    legendPanel.style.width = originalLegendWidth;
+                    legendPanel.style.minWidth = '';
+                    divider.style.display = originalDividerDisplay;
+                    legendPanel.style.display = originalLegendDisplay;
+                    Plotly.Plots.resize('graphPlot_' + tabId);
+                    addTimelineLine(tabId, tab.currentDateIndex);
+
+                    await navigator.clipboard.write([
+                        new ClipboardItem({ 'image/png': blob })
+                    ]);
                 } else {
-                    captureTarget = container;
+                    // --- Normal mode: capture graph + legend panel ---
+                    legendPanel.style.width = '300px';
+                    legendPanel.style.minWidth = '300px';
+
+                    const canvas = await html2canvas(container, {
+                        backgroundColor: null,
+                        scale: 2,
+                        useCORS: true,
+                        allowTaint: true,
+                        logging: false
+                    });
+
+                    const blob = await new Promise(resolve => {
+                        canvas.toBlob(resolve, 'image/png');
+                    });
+
+                    container.style.width = originalWidth;
+                    container.style.height = originalHeight;
+                    container.style.background = originalBackground;
+                    legendPanel.style.width = originalLegendWidth;
+                    legendPanel.style.minWidth = '';
+                    divider.style.display = originalDividerDisplay;
+                    legendPanel.style.display = originalLegendDisplay;
+                    Plotly.Plots.resize('graphPlot_' + tabId);
+                    addTimelineLine(tabId, tab.currentDateIndex);
+
+                    await navigator.clipboard.write([
+                        new ClipboardItem({ 'image/png': blob })
+                    ]);
                 }
-
-                const canvas = await html2canvas(captureTarget, {
-                    backgroundColor: null,
-                    scale: 2,
-                    useCORS: true,
-                    allowTaint: true,
-                    logging: false
-                });
-
-                const blob = await new Promise(resolve => {
-                    canvas.toBlob(resolve, 'image/png');
-                });
-
-                // Clean up report wrapper
-                if (reportWrapper) {
-                    document.body.removeChild(reportWrapper);
-                }
-
-                // Restore original styles
-                container.style.width = originalWidth;
-                container.style.height = originalHeight;
-                container.style.background = originalBackground;
-                legendPanel.style.width = originalLegendWidth;
-                legendPanel.style.minWidth = '';
-                divider.style.display = originalDividerDisplay;
-                legendPanel.style.display = originalLegendDisplay;
-
-                // Resize back to normal
-                Plotly.Plots.resize('graphPlot_' + tabId);
-                addTimelineLine(tabId, tab.currentDateIndex);
-
-                // Copy to clipboard
-                await navigator.clipboard.write([
-                    new ClipboardItem({ 'image/png': blob })
-                ]);
 
                 btn.textContent = '✓ Copied!';
                 setTimeout(() => {
