@@ -797,6 +797,70 @@
             font-style: italic;
         }
 
+        /* Y-axis preset bar */
+        .preset-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            flex-wrap: wrap;
+        }
+
+        .preset-bar-label {
+            font-size: 0.62em;
+            color: rgba(255,255,255,0.35);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-right: 2px;
+            white-space: nowrap;
+        }
+
+        .preset-btn {
+            font-size: 0.62em;
+            padding: 4px 10px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.04);
+            color: rgba(255,255,255,0.5);
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .preset-btn:hover {
+            background: rgba(99, 102, 241, 0.15);
+            border-color: rgba(99, 102, 241, 0.4);
+            color: #818cf8;
+        }
+
+        .preset-btn.active {
+            background: rgba(99, 102, 241, 0.2);
+            border-color: rgba(99, 102, 241, 0.5);
+            color: #a5b4fc;
+        }
+
+        .preset-other-input {
+            font-size: 0.62em;
+            padding: 4px 8px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.04);
+            color: rgba(255,255,255,0.7);
+            width: 120px;
+            outline: none;
+            display: none;
+        }
+
+        .preset-other-input.visible {
+            display: inline-block;
+        }
+
+        .preset-other-input:focus {
+            border-color: rgba(99, 102, 241, 0.5);
+            background: rgba(99, 102, 241, 0.08);
+        }
+
         .no-select { user-select: none; }
 
         /* Empty state */
@@ -1332,6 +1396,19 @@
                                 <span class="footer-note">Brackets = not significantly different</span>
                             </div>
                         </div>
+                        <div class="preset-bar" id="presetBar_${tab.id}">
+                            <span class="preset-bar-label">Y-Axis:</span>
+                            <button class="preset-btn" onclick="applyPreset('${tab.id}', 'turf-colour', this)">Turf Colour</button>
+                            <button class="preset-btn" onclick="applyPreset('${tab.id}', 'turf-quality', this)">Turf Quality</button>
+                            <button class="preset-btn" onclick="applyPreset('${tab.id}', 'sward-density', this)">Sward Density</button>
+                            <button class="preset-btn" onclick="applyPreset('${tab.id}', 'vwc', this)">VWC</button>
+                            <button class="preset-btn" onclick="applyPreset('${tab.id}', 'ndvi', this)">NDVI</button>
+                            <button class="preset-btn" onclick="applyPreset('${tab.id}', 'green-cover', this)">Green Cover</button>
+                            <button class="preset-btn" onclick="applyPreset('${tab.id}', 'other', this)">Other…</button>
+                            <input type="text" class="preset-other-input" id="presetOther_${tab.id}" placeholder="Label (unit)"
+                                   onkeyup="if(event.key==='Enter')applyCustomPreset('${tab.id}')"
+                                   onblur="applyCustomPreset('${tab.id}')">
+                        </div>
                     </div>
                 </div>
             `;
@@ -1407,6 +1484,68 @@
             const tab = tabs.find(t => t.id === tabId);
             if (tab) {
                 tab.yAxisPercent = btn.classList.contains('active');
+            }
+        }
+
+        const yAxisPresets = {
+            'turf-colour':   { label: 'Turf Colour',                  min: 1,   max: 9,   percent: false },
+            'turf-quality':  { label: 'Turf Quality',                 min: 1,   max: 9,   percent: false },
+            'sward-density': { label: 'Sward Density (%)',            min: 0,   max: 100, percent: true  },
+            'vwc':           { label: 'Volumetric Water Content (%)', min: 0,   max: 100, percent: true  },
+            'ndvi':          { label: 'NDVI',                         min: 0,   max: 1,   percent: false },
+            'green-cover':   { label: 'Green Coverage (%)',           min: 0,   max: 100, percent: true  }
+        };
+
+        function applyPreset(tabId, presetKey, btnEl) {
+            const bar = document.getElementById('presetBar_' + tabId);
+            const otherInput = document.getElementById('presetOther_' + tabId);
+
+            // Clear active state from all buttons in this bar
+            bar.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+            btnEl.classList.add('active');
+
+            if (presetKey === 'other') {
+                otherInput.classList.add('visible');
+                otherInput.focus();
+                return;
+            }
+
+            otherInput.classList.remove('visible');
+            const preset = yAxisPresets[presetKey];
+            if (!preset) return;
+
+            // Update the input fields
+            document.getElementById('yAxisLabel_' + tabId).value = preset.label;
+            document.getElementById('yAxisMin_' + tabId).value = preset.min;
+            document.getElementById('yAxisMax_' + tabId).value = preset.max;
+
+            const percentBtn = document.getElementById('yAxisPercent_' + tabId);
+            if (preset.percent) {
+                percentBtn.classList.add('active');
+            } else {
+                percentBtn.classList.remove('active');
+            }
+
+            // Update tab state
+            const tab = tabs.find(t => t.id === tabId);
+            if (tab) {
+                tab.yAxisLabel = preset.label;
+                tab.yAxisMin = preset.min;
+                tab.yAxisMax = preset.max;
+                tab.yAxisPercent = preset.percent;
+            }
+        }
+
+        function applyCustomPreset(tabId) {
+            const otherInput = document.getElementById('presetOther_' + tabId);
+            const val = otherInput.value.trim();
+            if (!val) return;
+
+            document.getElementById('yAxisLabel_' + tabId).value = val;
+
+            const tab = tabs.find(t => t.id === tabId);
+            if (tab) {
+                tab.yAxisLabel = val;
             }
         }
 
