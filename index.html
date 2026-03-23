@@ -884,6 +884,7 @@
             white-space: nowrap;
             font-family: 'Montserrat', sans-serif;
             font-weight: 500;
+            margin-left: auto;
         }
 
         .chart-type-toggle:hover {
@@ -910,7 +911,6 @@
             cursor: pointer;
             transition: all 0.2s;
             white-space: nowrap;
-            margin-left: auto;
         }
 
         .report-toggle:hover {
@@ -2299,52 +2299,67 @@
                 const originalDividerDisplay = divider.style.display;
                 const originalLegendDisplay = legendPanel.style.display;
 
-                container.style.width = '1200px';
-                container.style.height = '600px';
-                container.style.background = '#1a1a2e';
                 divider.style.display = 'none';
 
                 if (isReport) {
-                    legendPanel.style.display = 'none';
-                } else {
-                    legendPanel.style.width = '300px';
-                    legendPanel.style.minWidth = '300px';
-                }
-
-                await new Promise(resolve => {
-                    Plotly.Plots.resize('graphPlot_' + tabId);
-                    setTimeout(resolve, 200);
-                });
-                addTimelineLine(tabId, tab.currentDateIndex);
-                await new Promise(resolve => setTimeout(resolve, 300));
-
-                if (isReport) {
-                    // --- Report mode: white bg, black text, larger fonts, bordered ---
+                    // --- Report mode: landscape A4 Word document format ---
+                    // Landscape A4 printable area ≈ 24.7cm × 17cm ≈ 1460 × 1005 px at 150dpi
+                    // We use the table's natural width if wider, so no dates get cut off
                     const plotId = 'graphPlot_' + tabId;
+                    legendPanel.style.display = 'none';
+
+                    // 1. Measure the table's natural width first
+                    const tableEl = document.getElementById('reportTable_' + tabId);
+                    let naturalTableWidth = 1460; // landscape A4 minimum
+                    if (tableEl && tableEl.innerHTML) {
+                        // Temporarily make table auto-width to measure
+                        const origW = tableEl.style.width;
+                        const origMW = tableEl.style.maxWidth;
+                        const origOF = tableEl.style.overflow;
+                        tableEl.style.width = 'max-content';
+                        tableEl.style.maxWidth = 'none';
+                        tableEl.style.overflow = 'visible';
+                        const measured = tableEl.scrollWidth + 48; // +padding
+                        tableEl.style.width = origW;
+                        tableEl.style.maxWidth = origMW;
+                        tableEl.style.overflow = origOF;
+                        naturalTableWidth = Math.max(naturalTableWidth, measured);
+                    }
+
+                    const captureWidth = naturalTableWidth;
+                    const graphHeight = 560; // graph portion height
+
+                    // Set container to match full width
+                    container.style.width = captureWidth + 'px';
+                    container.style.height = graphHeight + 'px';
                     container.style.background = '#ffffff';
 
-                    // Restyle Plotly chart for print: white bg, black text, bigger fonts
+                    // Restyle Plotly for print: white bg, black text, bigger fonts
                     await Plotly.relayout(plotId, {
                         'paper_bgcolor': '#ffffff',
                         'plot_bgcolor': '#ffffff',
                         'title.font.color': '#000000',
                         'title.font.size': 32,
                         'xaxis.tickfont.color': '#333333',
-                        'xaxis.tickfont.size': 13,
+                        'xaxis.tickfont.size': 14,
                         'xaxis.title.font.color': '#222222',
-                        'xaxis.title.font.size': 15,
+                        'xaxis.title.font.size': 16,
                         'xaxis.gridcolor': 'rgba(0,0,0,0.1)',
                         'yaxis.tickfont.color': '#333333',
-                        'yaxis.tickfont.size': 13,
+                        'yaxis.tickfont.size': 14,
                         'yaxis.title.font.color': '#222222',
-                        'yaxis.title.font.size': 15,
+                        'yaxis.title.font.size': 16,
                         'yaxis.gridcolor': 'rgba(0,0,0,0.1)',
                         'legend.font.color': '#333333',
-                        'legend.font.size': 13
+                        'legend.font.size': 14
                     });
-                    await new Promise(resolve => setTimeout(resolve, 300));
 
-                    // 1. Capture graph
+                    await new Promise(resolve => {
+                        Plotly.Plots.resize(plotId);
+                        setTimeout(resolve, 400);
+                    });
+
+                    // Capture graph
                     const graphCanvas = await html2canvas(container, {
                         backgroundColor: '#ffffff',
                         scale: 2,
@@ -2354,15 +2369,13 @@
                     });
 
                     // 2. Capture the data table with print styles
-                    const tableEl = document.getElementById('reportTable_' + tabId);
                     let tableCanvas = null;
                     if (tableEl && tableEl.innerHTML) {
                         const origTableStyles = tableEl.getAttribute('style') || '';
-                        tableEl.style.width = '1200px';
+                        tableEl.style.width = captureWidth + 'px';
                         tableEl.style.background = '#ffffff';
-                        tableEl.style.padding = '20px 24px 24px';
+                        tableEl.style.padding = '4px 24px 24px';
 
-                        // Restyle table elements for print
                         const caption = tableEl.querySelector('.report-table caption');
                         const ths = tableEl.querySelectorAll('.report-table th');
                         const tds = tableEl.querySelectorAll('.report-table td');
@@ -2377,27 +2390,29 @@
 
                         if (caption) {
                             caption.style.color = '#000000';
-                            caption.style.fontSize = '1.3em';
+                            caption.style.fontSize = '1.2em';
+                            caption.style.paddingBottom = '10px';
                         }
                         if (table) {
-                            table.style.fontSize = '0.85em';
+                            table.style.fontSize = '0.9em';
+                            table.style.width = '100%';
                         }
                         ths.forEach(th => {
                             origThStyles.push(th.getAttribute('style') || '');
                             th.style.background = '#f0f0f0';
                             th.style.color = '#222222';
                             th.style.border = '1px solid #cccccc';
-                            th.style.padding = '8px 12px';
+                            th.style.padding = '8px 10px';
                             th.style.fontSize = '1em';
+                            th.style.whiteSpace = 'nowrap';
                         });
                         tds.forEach(td => {
                             origTdStyles.push(td.getAttribute('style') || '');
                             td.style.color = '#333333';
                             td.style.border = '1px solid #dddddd';
-                            td.style.padding = '7px 12px';
+                            td.style.padding = '7px 10px';
                             td.style.fontSize = '1em';
                         });
-                        // First-column cells bold black
                         tableEl.querySelectorAll('.report-table td:first-child').forEach(td => {
                             td.style.color = '#000000';
                         });
@@ -2405,12 +2420,9 @@
                             origRowStyles.push(row.getAttribute('style') || '');
                             row.style.background = 'transparent';
                         });
-                        // Alternate rows light grey
                         tableEl.querySelectorAll('.report-table tbody tr:nth-child(even)').forEach(row => {
                             row.style.background = '#f8f8f8';
                         });
-
-                        // Letter cells
                         tableEl.querySelectorAll('.letter-cell').forEach(el => {
                             el.style.color = '#888888';
                         });
@@ -2453,15 +2465,16 @@
                         'legend.font.size': 10
                     });
 
-                    // 3. Stitch graph + table with border and padding
+                    // 3. Stitch graph + table onto landscape canvas with border
                     const scale = 2;
-                    const padding = 24 * scale;
-                    const borderWidth = 3 * scale;
-                    const borderRadius = 16 * scale;
+                    const padding = 20 * scale;
+                    const borderWidth = 2 * scale;
                     const gw = graphCanvas.width;
                     const gh = graphCanvas.height;
                     const tw = tableCanvas ? tableCanvas.width : 0;
                     const th = tableCanvas ? tableCanvas.height : 0;
+
+                    // Use the wider of graph or table as content width
                     const contentWidth = Math.max(gw, tw);
                     const contentHeight = gh + th;
                     const finalWidth = contentWidth + (padding * 2) + (borderWidth * 2);
@@ -2477,31 +2490,35 @@
                     ctx.fillRect(0, 0, finalWidth, finalHeight);
 
                     // Draw border
-                    ctx.strokeStyle = '#cccccc';
+                    ctx.strokeStyle = '#bbbbbb';
                     ctx.lineWidth = borderWidth;
                     const bOff = borderWidth / 2;
                     ctx.beginPath();
-                    ctx.roundRect(bOff, bOff, finalWidth - borderWidth, finalHeight - borderWidth, borderRadius);
+                    ctx.roundRect(bOff, bOff, finalWidth - borderWidth, finalHeight - borderWidth, 12 * scale);
                     ctx.stroke();
 
-                    // Clip to rounded rect for content
-                    ctx.save();
-                    ctx.beginPath();
-                    ctx.roundRect(borderWidth, borderWidth, finalWidth - borderWidth * 2, finalHeight - borderWidth * 2, borderRadius - borderWidth / 2);
-                    ctx.clip();
-
-                    // Draw graph centered
+                    // Draw graph scaled to full content width, centered
                     const graphX = borderWidth + padding + (contentWidth - gw) / 2;
                     const graphY = borderWidth + padding;
                     ctx.drawImage(graphCanvas, graphX, graphY);
 
-                    // Draw table aligned
+                    // Draw table scaled to full content width, centered
                     if (tableCanvas) {
                         const tableX = borderWidth + padding + (contentWidth - tw) / 2;
                         const tableY = graphY + gh;
                         ctx.drawImage(tableCanvas, tableX, tableY);
                     }
-                    ctx.restore();
+
+                    // Thin divider line between graph and table
+                    if (tableCanvas) {
+                        ctx.strokeStyle = '#dddddd';
+                        ctx.lineWidth = 1 * scale;
+                        const lineY = borderWidth + padding + gh;
+                        ctx.beginPath();
+                        ctx.moveTo(borderWidth + padding, lineY);
+                        ctx.lineTo(finalWidth - borderWidth - padding, lineY);
+                        ctx.stroke();
+                    }
 
                     const blob = await new Promise(resolve => {
                         finalCanvas.toBlob(resolve, 'image/png');
@@ -2523,8 +2540,18 @@
                     ]);
                 } else {
                     // --- Normal mode: capture graph + legend panel ---
+                    container.style.width = '1200px';
+                    container.style.height = '600px';
+                    container.style.background = '#1a1a2e';
                     legendPanel.style.width = '300px';
                     legendPanel.style.minWidth = '300px';
+
+                    await new Promise(resolve => {
+                        Plotly.Plots.resize('graphPlot_' + tabId);
+                        setTimeout(resolve, 200);
+                    });
+                    addTimelineLine(tabId, tab.currentDateIndex);
+                    await new Promise(resolve => setTimeout(resolve, 300));
 
                     const canvas = await html2canvas(container, {
                         backgroundColor: null,
