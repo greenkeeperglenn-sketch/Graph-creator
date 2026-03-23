@@ -658,9 +658,19 @@
             padding: 4px 8px;
             border-radius: 6px;
             gap: 8px;
+            cursor: pointer;
+            user-select: none;
         }
 
         .legend-item:hover { background: rgba(255,255,255,0.05); }
+
+        .legend-item.hidden-treatment {
+            opacity: 0.35;
+        }
+
+        .legend-item.hidden-treatment .legend-color {
+            background: rgba(255,255,255,0.2) !important;
+        }
 
         .legend-color {
             width: 10px;
@@ -859,6 +869,34 @@
         .preset-other-input:focus {
             border-color: rgba(99, 102, 241, 0.5);
             background: rgba(99, 102, 241, 0.08);
+        }
+
+        /* Chart type toggle */
+        .chart-type-toggle {
+            font-size: 0.62em;
+            padding: 4px 12px;
+            border-radius: 20px;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            background: rgba(99, 102, 241, 0.06);
+            color: rgba(99, 102, 241, 0.6);
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 500;
+        }
+
+        .chart-type-toggle:hover {
+            background: rgba(99, 102, 241, 0.15);
+            border-color: rgba(99, 102, 241, 0.5);
+            color: #6366f1;
+        }
+
+        .chart-type-toggle.active {
+            background: rgba(99, 102, 241, 0.2);
+            border-color: rgba(99, 102, 241, 0.6);
+            color: #818cf8;
+            font-weight: 600;
         }
 
         /* Report mode toggle */
@@ -1366,7 +1404,9 @@
                 dates: [],
                 currentDateIndex: 0,
                 legendAscending: true,
-                reportMode: false
+                reportMode: false,
+                chartType: 'line',
+                hiddenTreatments: new Set()
             };
 
             tabs.push(tab);
@@ -1512,6 +1552,7 @@
                             <input type="text" class="preset-other-input" id="presetOther_${tab.id}" placeholder="Label (unit)"
                                    onkeyup="if(event.key==='Enter')applyCustomPreset('${tab.id}')"
                                    onblur="applyCustomPreset('${tab.id}')">
+                            <button class="chart-type-toggle" id="chartTypeToggle_${tab.id}" onclick="toggleChartType('${tab.id}')">Bar Chart</button>
                             <button class="report-toggle" id="reportToggle_${tab.id}" onclick="toggleReportMode('${tab.id}')">Report Mode</button>
                         </div>
                         <div class="report-table-wrapper" id="reportTable_${tab.id}"></div>
@@ -1915,23 +1956,48 @@
             plotEl.innerHTML = '';
 
             const isReport = !!tab.reportMode;
+            const isBar = tab.chartType === 'bar';
             const tickSuffix = tab.yAxisPercent ? '%' : '';
             const hoverSuffix = tab.yAxisPercent ? '%' : '';
             const lineShape = isReport ? 'linear' : 'spline';
 
-            const traces = tab.treatments.map((t, i) => ({
-                x: tab.dates,
-                y: t.values,
-                mode: 'lines+markers',
-                name: t.name,
-                line: { color: colors[i % colors.length], width: 3, shape: lineShape },
-                marker: { size: 8, color: colors[i % colors.length] },
-                hovertemplate: '<b>' + t.name + '</b><br>%{x}<br>%{y:.1f}' + hoverSuffix + '<extra></extra>'
-            }));
+            const traces = tab.treatments.map((t, i) => {
+                const isHidden = tab.hiddenTreatments.has(t.name);
+                const color = colors[i % colors.length];
+
+                if (isBar) {
+                    return {
+                        x: tab.dates,
+                        y: isHidden ? tab.dates.map(() => null) : t.values,
+                        type: 'bar',
+                        name: t.name,
+                        marker: {
+                            color: color,
+                            opacity: 0.85,
+                            line: { color: color, width: 1 }
+                        },
+                        hovertemplate: '<b>' + t.name + '</b><br>%{x}<br>%{y:.1f}' + hoverSuffix + '<extra></extra>',
+                        visible: isHidden ? 'legendonly' : true
+                    };
+                } else {
+                    return {
+                        x: tab.dates,
+                        y: isHidden ? tab.dates.map(() => null) : t.values,
+                        mode: 'lines+markers',
+                        name: t.name,
+                        line: { color: color, width: 3, shape: lineShape },
+                        marker: { size: 8, color: color },
+                        hovertemplate: '<b>' + t.name + '</b><br>%{x}<br>%{y:.1f}' + hoverSuffix + '<extra></extra>',
+                        visible: isHidden ? 'legendonly' : true
+                    };
+                }
+            });
 
             const legendCfg = isReport
                 ? { showlegend: true, legend: { font: { size: 10, color: 'rgba(255,255,255,0.7)', family: 'Montserrat, sans-serif' }, bgcolor: 'rgba(0,0,0,0)', borderwidth: 0, orientation: 'h', x: 0.5, xanchor: 'center', y: -0.22, yanchor: 'top', traceorder: 'normal' } }
                 : { showlegend: false };
+
+            const barLayout = isBar ? { barmode: 'group', bargap: 0.15, bargroupgap: 0.1 } : {};
 
             Plotly.newPlot(plotEl, traces, {
                 title: { text: tab.graphTitle, font: { size: 28, color: 'rgba(255,255,255,0.95)', family: 'Montserrat, sans-serif', weight: 700 }, x: 0.5, xanchor: 'center', y: 0.95, yanchor: 'top' },
@@ -1940,6 +2006,7 @@
                 plot_bgcolor: 'rgba(0,0,0,0)',
                 paper_bgcolor: 'rgba(0,0,0,0)',
                 ...legendCfg,
+                ...barLayout,
                 margin: { l: 55, r: 20, t: 60, b: isReport ? 100 : 80 },
                 autosize: true,
                 images: [{
@@ -2044,7 +2111,9 @@
             const suffix = tab.yAxisPercent ? '%' : '';
             sorted.forEach(s => {
                 const val = (typeof s.valueAtDate === 'number') ? s.valueAtDate.toFixed(1) : '0.0';
-                html += `<div class="legend-item" style="height:${itemHeight}px"><div class="legend-color" style="background:${s.color}"></div><span class="legend-name">${s.name}</span><span class="legend-value">${val}${suffix}</span></div>`;
+                const isHidden = tab.hiddenTreatments.has(s.name);
+                const hiddenClass = isHidden ? ' hidden-treatment' : '';
+                html += `<div class="legend-item${hiddenClass}" style="height:${itemHeight}px" onclick="toggleTreatment('${tabId}', '${s.name.replace(/'/g, "\\'")}')"><div class="legend-color" style="background:${s.color}"></div><span class="legend-name">${s.name}</span><span class="legend-value">${val}${suffix}</span></div>`;
             });
             html += '</div></div>';
 
@@ -2074,6 +2143,39 @@
             tab.legendAscending = !tab.legendAscending;
             document.getElementById('toggleBtn_' + tabId).textContent = tab.legendAscending ? '↑ Low - Top' : '↓ High - Top';
             updateLegend(tabId, tab.currentDateIndex);
+        }
+
+        function toggleTreatment(tabId, treatmentName) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (tab.hiddenTreatments.has(treatmentName)) {
+                tab.hiddenTreatments.delete(treatmentName);
+            } else {
+                // Don't allow hiding all treatments
+                const visibleCount = tab.treatments.length - tab.hiddenTreatments.size;
+                if (visibleCount <= 1) return;
+                tab.hiddenTreatments.add(treatmentName);
+            }
+            createGraph(tabId);
+            updateLegend(tabId, tab.currentDateIndex);
+            addTimelineLine(tabId, tab.currentDateIndex);
+        }
+
+        function toggleChartType(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            tab.chartType = tab.chartType === 'line' ? 'bar' : 'line';
+            const btn = document.getElementById('chartTypeToggle_' + tabId);
+            if (tab.chartType === 'bar') {
+                btn.textContent = 'Line Chart';
+                btn.classList.add('active');
+            } else {
+                btn.textContent = 'Bar Chart';
+                btn.classList.remove('active');
+            }
+            if (tab.dates.length > 0) {
+                createGraph(tabId);
+                updateLegend(tabId, tab.currentDateIndex);
+                addTimelineLine(tabId, tab.currentDateIndex);
+            }
         }
 
         function setupDivider(tabId) {
