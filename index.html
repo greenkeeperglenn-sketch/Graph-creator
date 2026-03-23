@@ -1971,11 +1971,12 @@
         function addTimelineLine(tabId, dateIndex) {
             const tab = tabs.find(t => t.id === tabId);
             const plotEl = document.getElementById('graphPlot_' + tabId);
-            
+
             const oldLine = plotEl.querySelector('.timeline-indicator');
             if (oldLine) oldLine.remove();
-            
+
             if (!tab.dates.length) return;
+            if (tab.reportMode) return;
             
             const plotArea = plotEl._fullLayout;
             if (!plotArea) return;
@@ -2216,57 +2217,195 @@
                 await new Promise(resolve => setTimeout(resolve, 300));
 
                 if (isReport) {
-                    // --- Report mode: graph image + table rendered onto a single canvas ---
-                    // 1. Capture graph area via html2canvas
+                    // --- Report mode: white bg, black text, larger fonts, bordered ---
+                    const plotId = 'graphPlot_' + tabId;
+                    container.style.background = '#ffffff';
+
+                    // Restyle Plotly chart for print: white bg, black text, bigger fonts
+                    await Plotly.relayout(plotId, {
+                        'paper_bgcolor': '#ffffff',
+                        'plot_bgcolor': '#ffffff',
+                        'title.font.color': '#000000',
+                        'title.font.size': 32,
+                        'xaxis.tickfont.color': '#333333',
+                        'xaxis.tickfont.size': 13,
+                        'xaxis.title.font.color': '#222222',
+                        'xaxis.title.font.size': 15,
+                        'xaxis.gridcolor': 'rgba(0,0,0,0.1)',
+                        'yaxis.tickfont.color': '#333333',
+                        'yaxis.tickfont.size': 13,
+                        'yaxis.title.font.color': '#222222',
+                        'yaxis.title.font.size': 15,
+                        'yaxis.gridcolor': 'rgba(0,0,0,0.1)',
+                        'legend.font.color': '#333333',
+                        'legend.font.size': 13
+                    });
+                    await new Promise(resolve => setTimeout(resolve, 300));
+
+                    // 1. Capture graph
                     const graphCanvas = await html2canvas(container, {
-                        backgroundColor: '#1a1a2e',
+                        backgroundColor: '#ffffff',
                         scale: 2,
                         useCORS: true,
                         allowTaint: true,
                         logging: false
                     });
 
-                    // 2. Capture the data table
+                    // 2. Capture the data table with print styles
                     const tableEl = document.getElementById('reportTable_' + tabId);
                     let tableCanvas = null;
                     if (tableEl && tableEl.innerHTML) {
-                        // Temporarily make table fixed-width for capture
-                        const origTableWidth = tableEl.style.width;
+                        const origTableStyles = tableEl.getAttribute('style') || '';
                         tableEl.style.width = '1200px';
+                        tableEl.style.background = '#ffffff';
+                        tableEl.style.padding = '20px 24px 24px';
+
+                        // Restyle table elements for print
+                        const caption = tableEl.querySelector('.report-table caption');
+                        const ths = tableEl.querySelectorAll('.report-table th');
+                        const tds = tableEl.querySelectorAll('.report-table td');
+                        const rows = tableEl.querySelectorAll('.report-table tr');
+                        const table = tableEl.querySelector('.report-table');
+
+                        const origCapStyle = caption ? caption.getAttribute('style') : '';
+                        const origThStyles = [];
+                        const origTdStyles = [];
+                        const origRowStyles = [];
+                        const origTableStyle = table ? table.getAttribute('style') : '';
+
+                        if (caption) {
+                            caption.style.color = '#000000';
+                            caption.style.fontSize = '1.3em';
+                        }
+                        if (table) {
+                            table.style.fontSize = '0.85em';
+                        }
+                        ths.forEach(th => {
+                            origThStyles.push(th.getAttribute('style') || '');
+                            th.style.background = '#f0f0f0';
+                            th.style.color = '#222222';
+                            th.style.border = '1px solid #cccccc';
+                            th.style.padding = '8px 12px';
+                            th.style.fontSize = '1em';
+                        });
+                        tds.forEach(td => {
+                            origTdStyles.push(td.getAttribute('style') || '');
+                            td.style.color = '#333333';
+                            td.style.border = '1px solid #dddddd';
+                            td.style.padding = '7px 12px';
+                            td.style.fontSize = '1em';
+                        });
+                        // First-column cells bold black
+                        tableEl.querySelectorAll('.report-table td:first-child').forEach(td => {
+                            td.style.color = '#000000';
+                        });
+                        rows.forEach(row => {
+                            origRowStyles.push(row.getAttribute('style') || '');
+                            row.style.background = 'transparent';
+                        });
+                        // Alternate rows light grey
+                        tableEl.querySelectorAll('.report-table tbody tr:nth-child(even)').forEach(row => {
+                            row.style.background = '#f8f8f8';
+                        });
+
+                        // Letter cells
+                        tableEl.querySelectorAll('.letter-cell').forEach(el => {
+                            el.style.color = '#888888';
+                        });
+
                         tableCanvas = await html2canvas(tableEl, {
-                            backgroundColor: '#1a1a2e',
+                            backgroundColor: '#ffffff',
                             scale: 2,
                             useCORS: true,
                             allowTaint: true,
                             logging: false
                         });
-                        tableEl.style.width = origTableWidth;
+
+                        // Restore table styles
+                        tableEl.setAttribute('style', origTableStyles);
+                        if (caption) caption.setAttribute('style', origCapStyle || '');
+                        if (table) table.setAttribute('style', origTableStyle || '');
+                        ths.forEach((th, i) => th.setAttribute('style', origThStyles[i] || ''));
+                        tds.forEach((td, i) => td.setAttribute('style', origTdStyles[i] || ''));
+                        rows.forEach((row, i) => row.setAttribute('style', origRowStyles[i] || ''));
+                        tableEl.querySelectorAll('.letter-cell').forEach(el => el.style.color = '');
                     }
 
-                    // 3. Stitch them together on a final canvas
+                    // Restore Plotly to dark theme
+                    await Plotly.relayout(plotId, {
+                        'paper_bgcolor': 'rgba(0,0,0,0)',
+                        'plot_bgcolor': 'rgba(0,0,0,0)',
+                        'title.font.color': 'rgba(255,255,255,0.95)',
+                        'title.font.size': 28,
+                        'xaxis.tickfont.color': 'rgba(255,255,255,0.5)',
+                        'xaxis.tickfont.size': 10,
+                        'xaxis.title.font.color': 'rgba(255,255,255,0.6)',
+                        'xaxis.title.font.size': 12,
+                        'xaxis.gridcolor': 'rgba(255,255,255,0.05)',
+                        'yaxis.tickfont.color': 'rgba(255,255,255,0.5)',
+                        'yaxis.tickfont.size': 10,
+                        'yaxis.title.font.color': 'rgba(255,255,255,0.6)',
+                        'yaxis.title.font.size': 12,
+                        'yaxis.gridcolor': 'rgba(255,255,255,0.05)',
+                        'legend.font.color': 'rgba(255,255,255,0.7)',
+                        'legend.font.size': 10
+                    });
+
+                    // 3. Stitch graph + table with border and padding
+                    const scale = 2;
+                    const padding = 24 * scale;
+                    const borderWidth = 3 * scale;
+                    const borderRadius = 16 * scale;
                     const gw = graphCanvas.width;
                     const gh = graphCanvas.height;
                     const tw = tableCanvas ? tableCanvas.width : 0;
                     const th = tableCanvas ? tableCanvas.height : 0;
-                    const finalWidth = Math.max(gw, tw);
-                    const finalHeight = gh + th;
+                    const contentWidth = Math.max(gw, tw);
+                    const contentHeight = gh + th;
+                    const finalWidth = contentWidth + (padding * 2) + (borderWidth * 2);
+                    const finalHeight = contentHeight + (padding * 2) + (borderWidth * 2);
 
                     const finalCanvas = document.createElement('canvas');
                     finalCanvas.width = finalWidth;
                     finalCanvas.height = finalHeight;
                     const ctx = finalCanvas.getContext('2d');
-                    ctx.fillStyle = '#1a1a2e';
+
+                    // White background
+                    ctx.fillStyle = '#ffffff';
                     ctx.fillRect(0, 0, finalWidth, finalHeight);
-                    ctx.drawImage(graphCanvas, 0, 0);
+
+                    // Draw border
+                    ctx.strokeStyle = '#cccccc';
+                    ctx.lineWidth = borderWidth;
+                    const bOff = borderWidth / 2;
+                    ctx.beginPath();
+                    ctx.roundRect(bOff, bOff, finalWidth - borderWidth, finalHeight - borderWidth, borderRadius);
+                    ctx.stroke();
+
+                    // Clip to rounded rect for content
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.roundRect(borderWidth, borderWidth, finalWidth - borderWidth * 2, finalHeight - borderWidth * 2, borderRadius - borderWidth / 2);
+                    ctx.clip();
+
+                    // Draw graph centered
+                    const graphX = borderWidth + padding + (contentWidth - gw) / 2;
+                    const graphY = borderWidth + padding;
+                    ctx.drawImage(graphCanvas, graphX, graphY);
+
+                    // Draw table aligned
                     if (tableCanvas) {
-                        ctx.drawImage(tableCanvas, 0, gh);
+                        const tableX = borderWidth + padding + (contentWidth - tw) / 2;
+                        const tableY = graphY + gh;
+                        ctx.drawImage(tableCanvas, tableX, tableY);
                     }
+                    ctx.restore();
 
                     const blob = await new Promise(resolve => {
                         finalCanvas.toBlob(resolve, 'image/png');
                     });
 
-                    // Restore
+                    // Restore container
                     container.style.width = originalWidth;
                     container.style.height = originalHeight;
                     container.style.background = originalBackground;
@@ -2274,7 +2413,7 @@
                     legendPanel.style.minWidth = '';
                     divider.style.display = originalDividerDisplay;
                     legendPanel.style.display = originalLegendDisplay;
-                    Plotly.Plots.resize('graphPlot_' + tabId);
+                    Plotly.Plots.resize(plotId);
                     addTimelineLine(tabId, tab.currentDateIndex);
 
                     await navigator.clipboard.write([
