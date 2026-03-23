@@ -593,7 +593,7 @@
         .legend-panel {
             width: 280px;
             min-width: 220px;
-            max-width: 400px;
+            max-width: 600px;
             display: flex;
             flex-direction: column;
             padding: 16px;
@@ -2295,7 +2295,7 @@
                 if (!dragging) return;
                 const container = divider.closest('.resizable-container');
                 const rect = container.getBoundingClientRect();
-                const newWidth = Math.max(220, Math.min(400, rect.right - e.clientX - 6));
+                const newWidth = Math.max(220, Math.min(600, rect.right - e.clientX - 6));
                 legend.style.width = newWidth + 'px';
                 Plotly.Plots.resize('graphPlot_' + tabId);
             });
