@@ -7,6 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -15,7 +16,7 @@
             background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
             color: #e0e0e0;
             height: 100vh;
-            overflow: hidden;
+            overflow: auto;
             display: flex;
             flex-direction: column;
         }
@@ -225,7 +226,7 @@
             padding: 20px 30px;
             gap: 20px;
             min-height: 0;
-            overflow: hidden;
+            overflow: auto;
         }
 
         /* Input Panel */
@@ -543,7 +544,7 @@
             backdrop-filter: blur(20px);
             border-radius: 16px;
             border: 1px solid rgba(255,255,255,0.08);
-            overflow: hidden;
+            overflow: auto;
         }
 
         .graph-panel {
@@ -552,12 +553,14 @@
             display: flex;
             flex-direction: column;
             position: relative;
+            overflow-y: auto;
         }
 
         .graph-plot {
             flex: 1;
             width: 100%;
             min-height: 300px;
+            flex-shrink: 0;
         }
 
         .divider {
@@ -590,7 +593,7 @@
         .legend-panel {
             width: 280px;
             min-width: 220px;
-            max-width: 400px;
+            max-width: 600px;
             display: flex;
             flex-direction: column;
             padding: 16px;
@@ -657,9 +660,19 @@
             padding: 4px 8px;
             border-radius: 6px;
             gap: 8px;
+            cursor: pointer;
+            user-select: none;
         }
 
         .legend-item:hover { background: rgba(255,255,255,0.05); }
+
+        .legend-item.hidden-treatment {
+            opacity: 0.35;
+        }
+
+        .legend-item.hidden-treatment .legend-color {
+            background: rgba(255,255,255,0.2) !important;
+        }
 
         .legend-color {
             width: 10px;
@@ -796,6 +809,205 @@
             font-style: italic;
         }
 
+        /* Y-axis preset bar */
+        .preset-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            flex-wrap: wrap;
+        }
+
+        .preset-bar-label {
+            font-size: 0.62em;
+            color: rgba(255,255,255,0.35);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-right: 2px;
+            white-space: nowrap;
+        }
+
+        .preset-btn {
+            font-size: 0.62em;
+            padding: 4px 10px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.04);
+            color: rgba(255,255,255,0.5);
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .preset-btn:hover {
+            background: rgba(99, 102, 241, 0.15);
+            border-color: rgba(99, 102, 241, 0.4);
+            color: #818cf8;
+        }
+
+        .preset-btn.active {
+            background: rgba(99, 102, 241, 0.2);
+            border-color: rgba(99, 102, 241, 0.5);
+            color: #a5b4fc;
+        }
+
+        .preset-other-input {
+            font-size: 0.62em;
+            padding: 4px 8px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.04);
+            color: rgba(255,255,255,0.7);
+            width: 120px;
+            outline: none;
+            display: none;
+        }
+
+        .preset-other-input.visible {
+            display: inline-block;
+        }
+
+        .preset-other-input:focus {
+            border-color: rgba(99, 102, 241, 0.5);
+            background: rgba(99, 102, 241, 0.08);
+        }
+
+        /* Chart type toggle */
+        .chart-type-toggle {
+            font-size: 0.62em;
+            padding: 4px 12px;
+            border-radius: 20px;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            background: rgba(99, 102, 241, 0.06);
+            color: rgba(99, 102, 241, 0.6);
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 500;
+            margin-left: auto;
+        }
+
+        .chart-type-toggle:hover {
+            background: rgba(99, 102, 241, 0.15);
+            border-color: rgba(99, 102, 241, 0.5);
+            color: #6366f1;
+        }
+
+        .chart-type-toggle.active {
+            background: rgba(99, 102, 241, 0.2);
+            border-color: rgba(99, 102, 241, 0.6);
+            color: #818cf8;
+            font-weight: 600;
+        }
+
+        /* Report mode toggle */
+        .report-toggle {
+            font-size: 0.62em;
+            padding: 4px 12px;
+            border-radius: 20px;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            background: rgba(245, 158, 11, 0.06);
+            color: rgba(245, 158, 11, 0.6);
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .report-toggle:hover {
+            background: rgba(245, 158, 11, 0.15);
+            border-color: rgba(245, 158, 11, 0.5);
+            color: #f59e0b;
+        }
+
+        .report-toggle.active {
+            background: rgba(245, 158, 11, 0.2);
+            border-color: rgba(245, 158, 11, 0.6);
+            color: #fbbf24;
+            font-weight: 600;
+        }
+
+        /* Report table */
+        .report-table-wrapper {
+            display: none;
+            background: #1a1a2e;
+            border-radius: 0 0 16px 16px;
+            padding: 16px 20px 20px;
+            overflow-x: auto;
+        }
+
+        .report-table-wrapper.visible {
+            display: block;
+        }
+
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.7em;
+        }
+
+        .report-table caption {
+            text-align: left;
+            font-size: 1.1em;
+            font-weight: 700;
+            color: rgba(255,255,255,0.85);
+            padding-bottom: 8px;
+        }
+
+        .report-table th {
+            background: rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.7);
+            font-weight: 600;
+            padding: 6px 10px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.08);
+            white-space: nowrap;
+        }
+
+        .report-table th:first-child {
+            text-align: left;
+            min-width: 140px;
+        }
+
+        .report-table td {
+            padding: 5px 10px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.06);
+            color: rgba(255,255,255,0.65);
+        }
+
+        .report-table td:first-child {
+            text-align: left;
+            font-weight: 600;
+            color: rgba(255,255,255,0.8);
+        }
+
+        .report-table tr:nth-child(even) {
+            background: rgba(255,255,255,0.02);
+        }
+
+        .report-table .cell-value {
+            line-height: 1.2;
+        }
+
+        .report-table .letter-cell {
+            font-size: 0.85em;
+            color: rgba(255,255,255,0.4);
+            font-style: italic;
+            line-height: 1.2;
+        }
+
+        /* Report container for screenshot */
+        .report-screenshot-wrapper {
+            display: none;
+        }
+
+        .report-screenshot-wrapper.visible {
+            display: block;
+        }
+
         .no-select { user-select: none; }
 
         /* Empty state */
@@ -822,6 +1034,113 @@
         /* Tab content visibility */
         .tab-content { display: none; }
         .tab-content.active { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+
+        /* Drag and drop overlay */
+        .drop-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(16, 185, 129, 0.12);
+            backdrop-filter: blur(8px);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+
+        .drop-overlay.active {
+            display: flex;
+        }
+
+        .drop-overlay-content {
+            text-align: center;
+            padding: 60px 80px;
+            border: 3px dashed rgba(16, 185, 129, 0.6);
+            border-radius: 24px;
+            background: rgba(15, 15, 26, 0.9);
+        }
+
+        .drop-overlay-content svg {
+            width: 80px;
+            height: 80px;
+            color: #10b981;
+            margin-bottom: 20px;
+        }
+
+        .drop-overlay-content h2 {
+            color: #10b981;
+            font-size: 1.6em;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .drop-overlay-content p {
+            color: rgba(255,255,255,0.5);
+            font-size: 0.9em;
+        }
+
+        /* Excel import button */
+        .project-btn.excel-btn:hover {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: rgba(16, 185, 129, 0.4);
+            color: #10b981;
+        }
+
+        .project-btn.clear-btn:hover {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.4);
+            color: #ef4444;
+        }
+
+        /* Drop zone in input panel */
+        .excel-dropzone {
+            min-height: 90px;
+            border: 2px dashed rgba(16, 185, 129, 0.3);
+            border-radius: 10px;
+            background: rgba(16, 185, 129, 0.04);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+
+        .excel-dropzone:hover {
+            border-color: rgba(16, 185, 129, 0.5);
+            background: rgba(16, 185, 129, 0.08);
+        }
+
+        .excel-dropzone.dragover {
+            border-color: #10b981;
+            background: rgba(16, 185, 129, 0.15);
+            border-style: solid;
+            transform: scale(1.02);
+        }
+
+        .excel-dropzone svg {
+            width: 28px;
+            height: 28px;
+            color: rgba(16, 185, 129, 0.6);
+            transition: color 0.2s;
+        }
+
+        .excel-dropzone:hover svg {
+            color: #10b981;
+        }
+
+        .excel-dropzone .dropzone-text {
+            font-size: 0.72em;
+            font-weight: 600;
+            color: rgba(16, 185, 129, 0.7);
+        }
+
+        .excel-dropzone .dropzone-hint {
+            font-size: 0.62em;
+            color: rgba(255,255,255,0.3);
+        }
     </style>
 </head>
 <body>
@@ -842,6 +1161,22 @@
             <button class="project-btn save-btn" onclick="saveProject()" title="Save Project">💾 Save</button>
             <button class="project-btn load-btn" onclick="document.getElementById('loadFileInput').click()" title="Load Project">📂 Load</button>
             <input type="file" id="loadFileInput" accept=".json" style="display:none" onchange="loadProject(event)">
+            <button class="project-btn excel-btn" onclick="document.getElementById('excelFileInput').click()" title="Import Excel file - each sheet becomes a graph">📊 Import Excel</button>
+            <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleExcelFile(event.target.files[0]); event.target.value=''">
+            <button class="project-btn clear-btn" onclick="clearAll()" title="Clear all tabs and start fresh">🗑 Clear All</button>
+        </div>
+    </div>
+
+    <div class="drop-overlay" id="dropOverlay">
+        <div class="drop-overlay-content">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="12" y1="18" x2="12" y2="12"/>
+                <polyline points="9 15 12 12 15 15"/>
+            </svg>
+            <h2>Drop Excel File</h2>
+            <p>Each sheet will become a separate graph</p>
         </div>
     </div>
 
@@ -1016,9 +1351,12 @@
                     treatments: savedTab.treatments || [],
                     dates: savedTab.dates || [],
                     currentDateIndex: 0,
-                    legendAscending: true
+                    legendAscending: true,
+                    reportMode: false,
+                    chartType: 'line',
+                    hiddenTreatments: new Set()
                 };
-                
+
                 tabs.push(tab);
                 createTabContent(tab);
                 
@@ -1081,7 +1419,10 @@
                 treatments: [],
                 dates: [],
                 currentDateIndex: 0,
-                legendAscending: true
+                legendAscending: true,
+                reportMode: false,
+                chartType: 'line',
+                hiddenTreatments: new Set()
             };
 
             tabs.push(tab);
@@ -1097,7 +1438,7 @@
             container.innerHTML = tabs.map(tab => `
                 <div class="tab ${tab.id === activeTabId ? 'active' : ''}" onclick="switchToTab('${tab.id}')">
                     <span class="tab-name" ondblclick="renameTab('${tab.id}', this)">${tab.name}</span>
-                    ${tabs.length > 1 ? `<span class="tab-close" onclick="event.stopPropagation(); closeTab('${tab.id}')">×</span>` : ''}
+                    <span class="tab-close" onclick="event.stopPropagation(); closeTab('${tab.id}')">×</span>
                 </div>
             `).join('');
         }
@@ -1140,6 +1481,22 @@
                                     <label>Y Max</label>
                                     <input type="number" id="yAxisMax_${tab.id}" value="100" placeholder="100">
                                 </div>
+                            </div>
+                            <div class="input-group">
+                                <label>Drop Excel File</label>
+                                <div class="excel-dropzone" id="excelDropzone_${tab.id}"
+                                     onclick="document.getElementById('excelInput_${tab.id}').click()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                        <polyline points="14 2 14 8 20 8"/>
+                                        <line x1="12" y1="18" x2="12" y2="12"/>
+                                        <polyline points="9 15 12 12 15 15"/>
+                                    </svg>
+                                    <span class="dropzone-text">Drag & drop .xlsx here</span>
+                                    <span class="dropzone-hint">or click to browse</span>
+                                </div>
+                                <input type="file" id="excelInput_${tab.id}" accept=".xlsx,.xls,.csv" style="display:none"
+                                       onchange="handleExcelFile(this.files[0]); this.value=''">
                             </div>
                             <div class="input-group" style="flex:1;">
                                 <label>Paste Data (from Excel/GenStat)</label>
@@ -1199,6 +1556,22 @@
                                 <span class="footer-note">Brackets = not significantly different</span>
                             </div>
                         </div>
+                        <div class="preset-bar" id="presetBar_${tab.id}">
+                            <span class="preset-bar-label">Y-Axis:</span>
+                            <button class="preset-btn" onclick="applyPreset('${tab.id}', 'turf-colour', this)">Turf Colour</button>
+                            <button class="preset-btn" onclick="applyPreset('${tab.id}', 'turf-quality', this)">Turf Quality</button>
+                            <button class="preset-btn" onclick="applyPreset('${tab.id}', 'sward-density', this)">Sward Density</button>
+                            <button class="preset-btn" onclick="applyPreset('${tab.id}', 'vwc', this)">VWC</button>
+                            <button class="preset-btn" onclick="applyPreset('${tab.id}', 'ndvi', this)">NDVI</button>
+                            <button class="preset-btn" onclick="applyPreset('${tab.id}', 'green-cover', this)">Green Cover</button>
+                            <button class="preset-btn" onclick="applyPreset('${tab.id}', 'other', this)">Other…</button>
+                            <input type="text" class="preset-other-input" id="presetOther_${tab.id}" placeholder="Label (unit)"
+                                   onkeyup="if(event.key==='Enter')applyCustomPreset('${tab.id}')"
+                                   onblur="applyCustomPreset('${tab.id}')">
+                            <button class="chart-type-toggle" id="chartTypeToggle_${tab.id}" onclick="toggleChartType('${tab.id}')">Bar Chart</button>
+                            <button class="report-toggle" id="reportToggle_${tab.id}" onclick="toggleReportMode('${tab.id}')">Report Mode</button>
+                        </div>
+                        <div class="report-table-wrapper" id="reportTable_${tab.id}"></div>
                     </div>
                 </div>
             `;
@@ -1214,6 +1587,34 @@
                     parseAndPlot(tabId);
                 }
             });
+
+            // Wire up the per-tab Excel dropzone
+            const dropzone = document.getElementById('excelDropzone_' + tabId);
+            if (dropzone) {
+                dropzone.addEventListener('dragenter', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropzone.classList.add('dragover');
+                });
+                dropzone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+                dropzone.addEventListener('dragleave', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropzone.classList.remove('dragover');
+                });
+                dropzone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropzone.classList.remove('dragover');
+                    const file = e.dataTransfer.files[0];
+                    if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.csv'))) {
+                        handleExcelFile(file);
+                    }
+                });
+            }
         }
 
         function switchToTab(tabId) {
@@ -1249,6 +1650,121 @@
             }
         }
 
+        const yAxisPresets = {
+            'turf-colour':   { label: 'Turf Colour',                  min: 1,   max: 9,   percent: false },
+            'turf-quality':  { label: 'Turf Quality',                 min: 1,   max: 9,   percent: false },
+            'sward-density': { label: 'Sward Density (%)',            min: 0,   max: 100, percent: true  },
+            'vwc':           { label: 'Volumetric Water Content (%)', min: 0,   max: 100, percent: true  },
+            'ndvi':          { label: 'NDVI',                         min: 0,   max: 1,   percent: false },
+            'green-cover':   { label: 'Green Coverage (%)',           min: 0,   max: 100, percent: true  }
+        };
+
+        function applyPreset(tabId, presetKey, btnEl) {
+            const bar = document.getElementById('presetBar_' + tabId);
+            const otherInput = document.getElementById('presetOther_' + tabId);
+
+            // Clear active state from all buttons in this bar
+            bar.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+            btnEl.classList.add('active');
+
+            if (presetKey === 'other') {
+                otherInput.classList.add('visible');
+                otherInput.focus();
+                return;
+            }
+
+            otherInput.classList.remove('visible');
+            const preset = yAxisPresets[presetKey];
+            if (!preset) return;
+
+            // Update the input fields
+            document.getElementById('yAxisLabel_' + tabId).value = preset.label;
+            document.getElementById('yAxisMin_' + tabId).value = preset.min;
+            document.getElementById('yAxisMax_' + tabId).value = preset.max;
+
+            const percentBtn = document.getElementById('yAxisPercent_' + tabId);
+            if (preset.percent) {
+                percentBtn.classList.add('active');
+            } else {
+                percentBtn.classList.remove('active');
+            }
+
+            // Update tab state
+            const tab = tabs.find(t => t.id === tabId);
+            if (tab) {
+                tab.yAxisLabel = preset.label;
+                tab.yAxisMin = preset.min;
+                tab.yAxisMax = preset.max;
+                tab.yAxisPercent = preset.percent;
+            }
+        }
+
+        function applyCustomPreset(tabId) {
+            const otherInput = document.getElementById('presetOther_' + tabId);
+            const val = otherInput.value.trim();
+            if (!val) return;
+
+            document.getElementById('yAxisLabel_' + tabId).value = val;
+
+            const tab = tabs.find(t => t.id === tabId);
+            if (tab) {
+                tab.yAxisLabel = val;
+            }
+        }
+
+        function toggleReportMode(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab) return;
+
+            tab.reportMode = !tab.reportMode;
+            const btn = document.getElementById('reportToggle_' + tabId);
+            btn.classList.toggle('active', tab.reportMode);
+
+            if (tab.dates.length > 0) {
+                createGraph(tabId);
+                if (tab.reportMode) {
+                    buildReportTable(tabId);
+                } else {
+                    const tableEl = document.getElementById('reportTable_' + tabId);
+                    tableEl.classList.remove('visible');
+                    tableEl.innerHTML = '';
+                }
+            }
+        }
+
+        function buildReportTable(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab || !tab.treatments.length) return;
+
+            const tableEl = document.getElementById('reportTable_' + tabId);
+            const suffix = tab.yAxisPercent ? '%' : '';
+
+            let html = '<table class="report-table">';
+            html += `<caption>${tab.graphTitle} — Data Summary</caption>`;
+
+            // Header row: Treatment | Date1 | Date2 | ...
+            html += '<thead><tr><th>Treatment</th>';
+            tab.dates.forEach(d => {
+                html += `<th>${d}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            // One row per treatment (original order)
+            tab.treatments.forEach(t => {
+                html += `<tr><td>${t.name}</td>`;
+                t.values.forEach((v, di) => {
+                    const val = (typeof v === 'number') ? v.toFixed(1) : '-';
+                    const letter = (t.letters && t.letters[di]) ? t.letters[di] : '';
+                    html += `<td><div class="cell-value">${val}${suffix}</div>${letter ? '<div class="letter-cell">' + letter + '</div>' : ''}</td>`;
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            tableEl.innerHTML = html;
+            tableEl.classList.add('visible');
+        }
+
         function checkPassword(tabId) {
             const input = document.getElementById('passwordInput_' + tabId);
             const overlay = document.getElementById('passwordOverlay_' + tabId);
@@ -1275,21 +1791,108 @@
         }
 
         function closeTab(tabId) {
-            if (tabs.length <= 1) return;
-            
+            if (tabs.length <= 1) {
+                // Last tab — reset it to blank instead of removing
+                const tab = tabs[0];
+                tab.data = null;
+                tab.graphTitle = 'Trial Results';
+                tab.yAxisLabel = 'Green Coverage (%)';
+                tab.xAxisLabel = 'Assessment Date';
+                tab.yAxisMin = 0;
+                tab.yAxisMax = 100;
+                tab.yAxisPercent = true;
+                tab.treatments = [];
+                tab.dates = [];
+                tab.currentDateIndex = 0;
+                tab.legendAscending = true;
+                tab.reportMode = false;
+                tab.chartType = 'line';
+                tab.hiddenTreatments = new Set();
+
+                // Reset the UI fields
+                const dataInput = document.getElementById('dataInput_' + tab.id);
+                if (dataInput) dataInput.value = '';
+                const titleInput = document.getElementById('graphTitle_' + tab.id);
+                if (titleInput) titleInput.value = 'Trial Results';
+                const yLabel = document.getElementById('yAxisLabel_' + tab.id);
+                if (yLabel) yLabel.value = 'Green Coverage (%)';
+                const xLabel = document.getElementById('xAxisLabel_' + tab.id);
+                if (xLabel) xLabel.value = 'Assessment Date';
+                const yMin = document.getElementById('yAxisMin_' + tab.id);
+                if (yMin) yMin.value = '0';
+                const yMax = document.getElementById('yAxisMax_' + tab.id);
+                if (yMax) yMax.value = '100';
+
+                // Clear the graph and report table
+                const plotEl = document.getElementById('plot_' + tab.id);
+                if (plotEl) Plotly.purge(plotEl);
+                const tableEl = document.getElementById('reportTable_' + tab.id);
+                if (tableEl) { tableEl.innerHTML = ''; tableEl.classList.remove('visible'); }
+
+                const statusEl = document.getElementById('status_' + tab.id);
+                if (statusEl) { statusEl.textContent = ''; statusEl.className = 'status'; }
+
+                renderTabs();
+                updateTabCount();
+                autoSave();
+                return;
+            }
+
             const idx = tabs.findIndex(t => t.id === tabId);
             tabs.splice(idx, 1);
-            
+
             document.getElementById('content_' + tabId)?.remove();
-            
+
             if (activeTabId === tabId) {
                 const newIdx = Math.min(idx, tabs.length - 1);
                 switchToTab(tabs[newIdx].id);
             }
-            
+
             renderTabs();
             updateTabCount();
-            
+
+            autoSave();
+        }
+
+        function clearAll() {
+            if (!confirm('Clear all tabs and start fresh?')) return;
+
+            // Remove all tab content elements
+            tabs.forEach(t => {
+                document.getElementById('content_' + t.id)?.remove();
+            });
+
+            // Reset to a single blank tab
+            tabCounter++;
+            const tabId = 'tab_' + tabCounter;
+            tabs.length = 0;
+            tabs.push({
+                id: tabId,
+                name: 'Graph ' + tabCounter,
+                data: null,
+                graphTitle: 'Trial Results',
+                yAxisLabel: 'Green Coverage (%)',
+                xAxisLabel: 'Assessment Date',
+                yAxisMin: 0,
+                yAxisMax: 100,
+                yAxisPercent: true,
+                treatments: [],
+                dates: [],
+                currentDateIndex: 0,
+                legendAscending: true,
+                reportMode: false,
+                chartType: 'line',
+                hiddenTreatments: new Set()
+            });
+
+            // Reset project title
+            projectName = 'Untitled Project';
+            document.getElementById('projectTitle').textContent = projectName;
+
+            renderTabs();
+            createTabContent(tabs[0]);
+            switchToTab(tabId);
+            updateTabCount();
             autoSave();
         }
 
@@ -1371,8 +1974,9 @@
                     
                     if (!name) continue;
                     
-                    // Skip statistical rows
-                    if (name.match(/^(P|LSD|d\.f\.|%c\.v\.|SED|CV)$/i)) continue;
+                    // Skip statistical rows and DAT header rows
+                    if (name.match(/^(P|LSD|d\.f\.|%c\.v\.|SED|CV|DAT)$/i)) continue;
+                    if (name.split(/\s*-\s*/).every(p => /^\d*DAT\d*$/i.test(p))) continue;
 
                     const values = [];
                     const letters = [];
@@ -1386,7 +1990,7 @@
                         }
                         
                         // Try to match number with optional letter group (e.g., "45.2a" or "45.2 ab" or just "45.2")
-                        const match = cell.match(/^([\d.]+)\s*([a-zA-Z]*)$/);
+                        const match = cell.match(/^(\d+\.?\d*)\s*([a-zA-Z]*)$/);
                         
                         if (match) {
                             const num = parseFloat(match[1]);
@@ -1455,18 +2059,49 @@
             const plotEl = document.getElementById('graphPlot_' + tabId);
             plotEl.innerHTML = '';
 
+            const isReport = !!tab.reportMode;
+            const isBar = tab.chartType === 'bar';
             const tickSuffix = tab.yAxisPercent ? '%' : '';
             const hoverSuffix = tab.yAxisPercent ? '%' : '';
+            const lineShape = isReport ? 'linear' : 'spline';
 
-            const traces = tab.treatments.map((t, i) => ({
-                x: tab.dates,
-                y: t.values,
-                mode: 'lines+markers',
-                name: t.name,
-                line: { color: colors[i % colors.length], width: 3, shape: 'spline' },
-                marker: { size: 8, color: colors[i % colors.length] },
-                hovertemplate: '<b>' + t.name + '</b><br>%{x}<br>%{y:.1f}' + hoverSuffix + '<extra></extra>'
-            }));
+            const traces = tab.treatments.map((t, i) => {
+                const isHidden = tab.hiddenTreatments.has(t.name);
+                const color = colors[i % colors.length];
+
+                if (isBar) {
+                    return {
+                        x: tab.dates,
+                        y: isHidden ? tab.dates.map(() => null) : t.values,
+                        type: 'bar',
+                        name: t.name,
+                        marker: {
+                            color: color,
+                            opacity: 0.85,
+                            line: { color: color, width: 1 }
+                        },
+                        hovertemplate: '<b>' + t.name + '</b><br>%{x}<br>%{y:.1f}' + hoverSuffix + '<extra></extra>',
+                        visible: isHidden ? 'legendonly' : true
+                    };
+                } else {
+                    return {
+                        x: tab.dates,
+                        y: isHidden ? tab.dates.map(() => null) : t.values,
+                        mode: 'lines+markers',
+                        name: t.name,
+                        line: { color: color, width: 3, shape: lineShape },
+                        marker: { size: 8, color: color },
+                        hovertemplate: '<b>' + t.name + '</b><br>%{x}<br>%{y:.1f}' + hoverSuffix + '<extra></extra>',
+                        visible: isHidden ? 'legendonly' : true
+                    };
+                }
+            });
+
+            const legendCfg = isReport
+                ? { showlegend: true, legend: { font: { size: 10, color: 'rgba(255,255,255,0.7)', family: 'Montserrat, sans-serif' }, bgcolor: 'rgba(0,0,0,0)', borderwidth: 0, orientation: 'v', x: 1.02, xanchor: 'left', y: 1, yanchor: 'top', traceorder: 'normal' } }
+                : { showlegend: false };
+
+            const barLayout = isBar ? { barmode: 'group', bargap: 0.15, bargroupgap: 0.1 } : {};
 
             Plotly.newPlot(plotEl, traces, {
                 title: { text: tab.graphTitle, font: { size: 28, color: 'rgba(255,255,255,0.95)', family: 'Montserrat, sans-serif', weight: 700 }, x: 0.5, xanchor: 'center', y: 0.95, yanchor: 'top' },
@@ -1474,8 +2109,9 @@
                 yaxis: { title: { text: tab.yAxisLabel, font: { size: 12, color: 'rgba(255,255,255,0.6)', family: 'Montserrat, sans-serif' } }, range: [tab.yAxisMin, tab.yAxisMax], showgrid: true, gridcolor: 'rgba(255,255,255,0.05)', tickfont: { size: 10, color: 'rgba(255,255,255,0.5)', family: 'Montserrat, sans-serif' }, ticksuffix: tickSuffix },
                 plot_bgcolor: 'rgba(0,0,0,0)',
                 paper_bgcolor: 'rgba(0,0,0,0)',
-                showlegend: false,
-                margin: { l: 55, r: 20, t: 60, b: 80 },
+                ...legendCfg,
+                ...barLayout,
+                margin: { l: 55, r: isReport ? 180 : 20, t: 60, b: 80 },
                 autosize: true,
                 images: [{
                     source: logoPath,
@@ -1492,25 +2128,17 @@
                 }]
             }, { responsive: true, displayModeBar: false });
 
-            plotEl.on('plotly_hover', function(data) {
-                const pointIndex = data.points[0].pointNumber;
-                if (pointIndex !== tab.currentDateIndex) {
-                    tab.currentDateIndex = pointIndex;
-                    updateLegend(tabId, pointIndex);
-                    updateNavigation(tabId);
-                    addTimelineLine(tabId, pointIndex);
-                }
-            });
         }
 
         function addTimelineLine(tabId, dateIndex) {
             const tab = tabs.find(t => t.id === tabId);
             const plotEl = document.getElementById('graphPlot_' + tabId);
-            
+
             const oldLine = plotEl.querySelector('.timeline-indicator');
             if (oldLine) oldLine.remove();
-            
+
             if (!tab.dates.length) return;
+            if (tab.reportMode) return;
             
             const plotArea = plotEl._fullLayout;
             if (!plotArea) return;
@@ -1578,7 +2206,9 @@
             const suffix = tab.yAxisPercent ? '%' : '';
             sorted.forEach(s => {
                 const val = (typeof s.valueAtDate === 'number') ? s.valueAtDate.toFixed(1) : '0.0';
-                html += `<div class="legend-item" style="height:${itemHeight}px"><div class="legend-color" style="background:${s.color}"></div><span class="legend-name">${s.name}</span><span class="legend-value">${val}${suffix}</span></div>`;
+                const isHidden = tab.hiddenTreatments.has(s.name);
+                const hiddenClass = isHidden ? ' hidden-treatment' : '';
+                html += `<div class="legend-item${hiddenClass}" style="height:${itemHeight}px" onclick="toggleTreatment('${tabId}', '${s.name.replace(/'/g, "\\'")}')"><div class="legend-color" style="background:${s.color}"></div><span class="legend-name">${s.name}</span><span class="legend-value">${val}${suffix}</span></div>`;
             });
             html += '</div></div>';
 
@@ -1610,6 +2240,39 @@
             updateLegend(tabId, tab.currentDateIndex);
         }
 
+        function toggleTreatment(tabId, treatmentName) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (tab.hiddenTreatments.has(treatmentName)) {
+                tab.hiddenTreatments.delete(treatmentName);
+            } else {
+                // Don't allow hiding all treatments
+                const visibleCount = tab.treatments.length - tab.hiddenTreatments.size;
+                if (visibleCount <= 1) return;
+                tab.hiddenTreatments.add(treatmentName);
+            }
+            createGraph(tabId);
+            updateLegend(tabId, tab.currentDateIndex);
+            addTimelineLine(tabId, tab.currentDateIndex);
+        }
+
+        function toggleChartType(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            tab.chartType = tab.chartType === 'line' ? 'bar' : 'line';
+            const btn = document.getElementById('chartTypeToggle_' + tabId);
+            if (tab.chartType === 'bar') {
+                btn.textContent = 'Line Chart';
+                btn.classList.add('active');
+            } else {
+                btn.textContent = 'Bar Chart';
+                btn.classList.remove('active');
+            }
+            if (tab.dates.length > 0) {
+                createGraph(tabId);
+                updateLegend(tabId, tab.currentDateIndex);
+                addTimelineLine(tabId, tab.currentDateIndex);
+            }
+        }
+
         function setupDivider(tabId) {
             const divider = document.getElementById('divider_' + tabId);
             const legend = document.getElementById('legendPanel_' + tabId);
@@ -1624,7 +2287,7 @@
                 if (!dragging) return;
                 const container = divider.closest('.resizable-container');
                 const rect = container.getBoundingClientRect();
-                const newWidth = Math.max(220, Math.min(400, rect.right - e.clientX - 6));
+                const newWidth = Math.max(220, Math.min(600, rect.right - e.clientX - 6));
                 legend.style.width = newWidth + 'px';
                 Plotly.Plots.resize('graphPlot_' + tabId);
             });
@@ -1714,17 +2377,14 @@
             btn.textContent = '⏳ Copying...';
             btn.classList.add('copying');
 
-            try {
-                // Wait for fonts to be ready
-                await document.fonts.ready;
+            const isReport = !!tab.reportMode;
 
-                // Additional delay to ensure fonts are fully loaded
+            try {
+                await document.fonts.ready;
                 await new Promise(resolve => setTimeout(resolve, 200));
 
-                // Get the resizable container (graph + legend)
                 const container = document.querySelector('#content_' + tabId + ' .resizable-container');
 
-                // Store original styles
                 const originalWidth = container.style.width;
                 const originalHeight = container.style.height;
                 const originalBackground = container.style.background;
@@ -1732,58 +2392,290 @@
                 const originalLegendWidth = legendPanel.style.width;
                 const divider = container.querySelector('.divider');
                 const originalDividerDisplay = divider.style.display;
+                const originalLegendDisplay = legendPanel.style.display;
 
-                // Apply fixed dimensions for consistent output
-                container.style.width = '1200px';
-                container.style.height = '600px';
-                // Make background solid for screenshot (matches the semi-transparent grey)
-                container.style.background = '#1a1a2e';
-                legendPanel.style.width = '300px';
-                legendPanel.style.minWidth = '300px';
                 divider.style.display = 'none';
 
-                // Resize Plotly chart to fit new dimensions
-                await new Promise(resolve => {
+                if (isReport) {
+                    // --- Report mode: landscape A4 Word document format ---
+                    // Landscape A4 printable area ≈ 24.7cm × 17cm ≈ 1460 × 1005 px at 150dpi
+                    // We use the table's natural width if wider, so no dates get cut off
+                    const plotId = 'graphPlot_' + tabId;
+                    legendPanel.style.display = 'none';
+
+                    // 1. Measure the table's natural width first
+                    const tableEl = document.getElementById('reportTable_' + tabId);
+                    let naturalTableWidth = 1460; // landscape A4 minimum
+                    if (tableEl && tableEl.innerHTML) {
+                        // Temporarily make table auto-width to measure
+                        const origW = tableEl.style.width;
+                        const origMW = tableEl.style.maxWidth;
+                        const origOF = tableEl.style.overflow;
+                        tableEl.style.width = 'max-content';
+                        tableEl.style.maxWidth = 'none';
+                        tableEl.style.overflow = 'visible';
+                        const measured = tableEl.scrollWidth + 48; // +padding
+                        tableEl.style.width = origW;
+                        tableEl.style.maxWidth = origMW;
+                        tableEl.style.overflow = origOF;
+                        naturalTableWidth = Math.max(naturalTableWidth, measured);
+                    }
+
+                    const captureWidth = naturalTableWidth;
+                    const graphHeight = 560; // graph portion height
+
+                    // Set container to match full width
+                    container.style.width = captureWidth + 'px';
+                    container.style.height = graphHeight + 'px';
+                    container.style.background = '#ffffff';
+
+                    // Restyle Plotly for print: white bg, black text, bigger fonts
+                    await Plotly.relayout(plotId, {
+                        'paper_bgcolor': '#ffffff',
+                        'plot_bgcolor': '#ffffff',
+                        'title.font.color': '#000000',
+                        'title.font.size': 32,
+                        'xaxis.tickfont.color': '#333333',
+                        'xaxis.tickfont.size': 14,
+                        'xaxis.title.font.color': '#222222',
+                        'xaxis.title.font.size': 16,
+                        'xaxis.gridcolor': 'rgba(0,0,0,0.1)',
+                        'yaxis.tickfont.color': '#333333',
+                        'yaxis.tickfont.size': 14,
+                        'yaxis.title.font.color': '#222222',
+                        'yaxis.title.font.size': 16,
+                        'yaxis.gridcolor': 'rgba(0,0,0,0.1)',
+                        'legend.font.color': '#333333',
+                        'legend.font.size': 14,
+                        'margin.r': 200
+                    });
+
+                    await new Promise(resolve => {
+                        Plotly.Plots.resize(plotId);
+                        setTimeout(resolve, 400);
+                    });
+
+                    // Capture graph
+                    const graphCanvas = await html2canvas(container, {
+                        backgroundColor: '#ffffff',
+                        scale: 2,
+                        useCORS: true,
+                        allowTaint: true,
+                        logging: false
+                    });
+
+                    // 2. Capture the data table with print styles
+                    let tableCanvas = null;
+                    if (tableEl && tableEl.innerHTML) {
+                        const origTableStyles = tableEl.getAttribute('style') || '';
+                        tableEl.style.width = captureWidth + 'px';
+                        tableEl.style.background = '#ffffff';
+                        tableEl.style.padding = '4px 24px 24px';
+
+                        const caption = tableEl.querySelector('.report-table caption');
+                        const ths = tableEl.querySelectorAll('.report-table th');
+                        const tds = tableEl.querySelectorAll('.report-table td');
+                        const rows = tableEl.querySelectorAll('.report-table tr');
+                        const table = tableEl.querySelector('.report-table');
+
+                        const origCapStyle = caption ? caption.getAttribute('style') : '';
+                        const origThStyles = [];
+                        const origTdStyles = [];
+                        const origRowStyles = [];
+                        const origTableStyle = table ? table.getAttribute('style') : '';
+
+                        if (caption) {
+                            caption.style.color = '#000000';
+                            caption.style.fontSize = '1.2em';
+                            caption.style.paddingBottom = '10px';
+                        }
+                        if (table) {
+                            table.style.fontSize = '0.9em';
+                            table.style.width = '100%';
+                        }
+                        ths.forEach(th => {
+                            origThStyles.push(th.getAttribute('style') || '');
+                            th.style.background = '#f0f0f0';
+                            th.style.color = '#222222';
+                            th.style.border = '1px solid #cccccc';
+                            th.style.padding = '8px 10px';
+                            th.style.fontSize = '1em';
+                            th.style.whiteSpace = 'nowrap';
+                        });
+                        tds.forEach(td => {
+                            origTdStyles.push(td.getAttribute('style') || '');
+                            td.style.color = '#333333';
+                            td.style.border = '1px solid #dddddd';
+                            td.style.padding = '7px 10px';
+                            td.style.fontSize = '1em';
+                        });
+                        tableEl.querySelectorAll('.report-table td:first-child').forEach(td => {
+                            td.style.color = '#000000';
+                        });
+                        rows.forEach(row => {
+                            origRowStyles.push(row.getAttribute('style') || '');
+                            row.style.background = 'transparent';
+                        });
+                        tableEl.querySelectorAll('.report-table tbody tr:nth-child(even)').forEach(row => {
+                            row.style.background = '#f8f8f8';
+                        });
+                        tableEl.querySelectorAll('.letter-cell').forEach(el => {
+                            el.style.color = '#888888';
+                        });
+
+                        tableCanvas = await html2canvas(tableEl, {
+                            backgroundColor: '#ffffff',
+                            scale: 2,
+                            useCORS: true,
+                            allowTaint: true,
+                            logging: false
+                        });
+
+                        // Restore table styles
+                        tableEl.setAttribute('style', origTableStyles);
+                        if (caption) caption.setAttribute('style', origCapStyle || '');
+                        if (table) table.setAttribute('style', origTableStyle || '');
+                        ths.forEach((th, i) => th.setAttribute('style', origThStyles[i] || ''));
+                        tds.forEach((td, i) => td.setAttribute('style', origTdStyles[i] || ''));
+                        rows.forEach((row, i) => row.setAttribute('style', origRowStyles[i] || ''));
+                        tableEl.querySelectorAll('.letter-cell').forEach(el => el.style.color = '');
+                    }
+
+                    // Restore Plotly to dark theme
+                    await Plotly.relayout(plotId, {
+                        'paper_bgcolor': 'rgba(0,0,0,0)',
+                        'plot_bgcolor': 'rgba(0,0,0,0)',
+                        'title.font.color': 'rgba(255,255,255,0.95)',
+                        'title.font.size': 28,
+                        'xaxis.tickfont.color': 'rgba(255,255,255,0.5)',
+                        'xaxis.tickfont.size': 10,
+                        'xaxis.title.font.color': 'rgba(255,255,255,0.6)',
+                        'xaxis.title.font.size': 12,
+                        'xaxis.gridcolor': 'rgba(255,255,255,0.05)',
+                        'yaxis.tickfont.color': 'rgba(255,255,255,0.5)',
+                        'yaxis.tickfont.size': 10,
+                        'yaxis.title.font.color': 'rgba(255,255,255,0.6)',
+                        'yaxis.title.font.size': 12,
+                        'yaxis.gridcolor': 'rgba(255,255,255,0.05)',
+                        'legend.font.color': 'rgba(255,255,255,0.7)',
+                        'legend.font.size': 10,
+                        'margin.r': 180
+                    });
+
+                    // 3. Stitch graph + table onto landscape canvas with border
+                    const scale = 2;
+                    const padding = 20 * scale;
+                    const borderWidth = 2 * scale;
+                    const gw = graphCanvas.width;
+                    const gh = graphCanvas.height;
+                    const tw = tableCanvas ? tableCanvas.width : 0;
+                    const th = tableCanvas ? tableCanvas.height : 0;
+
+                    // Use the wider of graph or table as content width
+                    const contentWidth = Math.max(gw, tw);
+                    const contentHeight = gh + th;
+                    const finalWidth = contentWidth + (padding * 2) + (borderWidth * 2);
+                    const finalHeight = contentHeight + (padding * 2) + (borderWidth * 2);
+
+                    const finalCanvas = document.createElement('canvas');
+                    finalCanvas.width = finalWidth;
+                    finalCanvas.height = finalHeight;
+                    const ctx = finalCanvas.getContext('2d');
+
+                    // White background
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, finalWidth, finalHeight);
+
+                    // Draw border
+                    ctx.strokeStyle = '#bbbbbb';
+                    ctx.lineWidth = borderWidth;
+                    const bOff = borderWidth / 2;
+                    ctx.beginPath();
+                    ctx.roundRect(bOff, bOff, finalWidth - borderWidth, finalHeight - borderWidth, 12 * scale);
+                    ctx.stroke();
+
+                    // Draw graph scaled to full content width, centered
+                    const graphX = borderWidth + padding + (contentWidth - gw) / 2;
+                    const graphY = borderWidth + padding;
+                    ctx.drawImage(graphCanvas, graphX, graphY);
+
+                    // Draw table scaled to full content width, centered
+                    if (tableCanvas) {
+                        const tableX = borderWidth + padding + (contentWidth - tw) / 2;
+                        const tableY = graphY + gh;
+                        ctx.drawImage(tableCanvas, tableX, tableY);
+                    }
+
+                    // Thin divider line between graph and table
+                    if (tableCanvas) {
+                        ctx.strokeStyle = '#dddddd';
+                        ctx.lineWidth = 1 * scale;
+                        const lineY = borderWidth + padding + gh;
+                        ctx.beginPath();
+                        ctx.moveTo(borderWidth + padding, lineY);
+                        ctx.lineTo(finalWidth - borderWidth - padding, lineY);
+                        ctx.stroke();
+                    }
+
+                    const blob = await new Promise(resolve => {
+                        finalCanvas.toBlob(resolve, 'image/png');
+                    });
+
+                    // Restore container
+                    container.style.width = originalWidth;
+                    container.style.height = originalHeight;
+                    container.style.background = originalBackground;
+                    legendPanel.style.width = originalLegendWidth;
+                    legendPanel.style.minWidth = '';
+                    divider.style.display = originalDividerDisplay;
+                    legendPanel.style.display = originalLegendDisplay;
+                    Plotly.Plots.resize(plotId);
+                    addTimelineLine(tabId, tab.currentDateIndex);
+
+                    await navigator.clipboard.write([
+                        new ClipboardItem({ 'image/png': blob })
+                    ]);
+                } else {
+                    // --- Normal mode: capture graph + legend panel ---
+                    container.style.width = '1200px';
+                    container.style.height = '600px';
+                    container.style.background = '#1a1a2e';
+                    legendPanel.style.width = '300px';
+                    legendPanel.style.minWidth = '300px';
+
+                    await new Promise(resolve => {
+                        Plotly.Plots.resize('graphPlot_' + tabId);
+                        setTimeout(resolve, 200);
+                    });
+                    addTimelineLine(tabId, tab.currentDateIndex);
+                    await new Promise(resolve => setTimeout(resolve, 300));
+
+                    const canvas = await html2canvas(container, {
+                        backgroundColor: null,
+                        scale: 2,
+                        useCORS: true,
+                        allowTaint: true,
+                        logging: false
+                    });
+
+                    const blob = await new Promise(resolve => {
+                        canvas.toBlob(resolve, 'image/png');
+                    });
+
+                    container.style.width = originalWidth;
+                    container.style.height = originalHeight;
+                    container.style.background = originalBackground;
+                    legendPanel.style.width = originalLegendWidth;
+                    legendPanel.style.minWidth = '';
+                    divider.style.display = originalDividerDisplay;
+                    legendPanel.style.display = originalLegendDisplay;
                     Plotly.Plots.resize('graphPlot_' + tabId);
-                    setTimeout(resolve, 200);
-                });
+                    addTimelineLine(tabId, tab.currentDateIndex);
 
-                // Re-add timeline line at correct position
-                addTimelineLine(tabId, tab.currentDateIndex);
-
-                // Longer delay to ensure fonts and rendering are complete
-                await new Promise(resolve => setTimeout(resolve, 300));
-
-                // Capture the container with html2canvas (better font support)
-                const canvas = await html2canvas(container, {
-                    backgroundColor: null, // Transparent so we only get the container
-                    scale: 2, // Higher resolution
-                    useCORS: true,
-                    allowTaint: true,
-                    logging: false
-                });
-
-                // Convert canvas to blob
-                const blob = await new Promise(resolve => {
-                    canvas.toBlob(resolve, 'image/png');
-                });
-
-                // Restore original styles
-                container.style.width = originalWidth;
-                container.style.height = originalHeight;
-                container.style.background = originalBackground;
-                legendPanel.style.width = originalLegendWidth;
-                legendPanel.style.minWidth = '';
-                divider.style.display = originalDividerDisplay;
-
-                // Resize back to normal
-                Plotly.Plots.resize('graphPlot_' + tabId);
-                addTimelineLine(tabId, tab.currentDateIndex);
-
-                // Copy to clipboard
-                await navigator.clipboard.write([
-                    new ClipboardItem({ 'image/png': blob })
-                ]);
+                    await navigator.clipboard.write([
+                        new ClipboardItem({ 'image/png': blob })
+                    ]);
+                }
 
                 btn.textContent = '✓ Copied!';
                 setTimeout(() => {
@@ -1795,14 +2687,13 @@
                 console.error('Screenshot failed:', err);
                 btn.textContent = '✗ Failed';
                 btn.classList.remove('copying');
-                
-                // Provide helpful error message
+
                 if (err.name === 'NotAllowedError') {
                     alert('Clipboard access denied. Please allow clipboard permissions or use HTTPS.');
                 } else {
                     alert('Screenshot failed: ' + err.message);
                 }
-                
+
                 setTimeout(() => {
                     btn.textContent = originalText;
                 }, 2000);
@@ -1817,6 +2708,190 @@
                 addTimelineLine(activeTabId, tab.currentDateIndex);
             }
         });
+
+        // ==================== EXCEL DRAG & DROP ====================
+
+        // Drag and drop handlers
+        let dragCounter = 0;
+
+        document.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            dragCounter++;
+            if (dragCounter === 1) {
+                document.getElementById('dropOverlay').classList.add('active');
+            }
+        });
+
+        document.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dragCounter--;
+            if (dragCounter === 0) {
+                document.getElementById('dropOverlay').classList.remove('active');
+            }
+        });
+
+        document.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+
+        document.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dragCounter = 0;
+            document.getElementById('dropOverlay').classList.remove('active');
+
+            const file = e.dataTransfer.files[0];
+            if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.csv'))) {
+                handleExcelFile(file);
+            }
+        });
+
+        // Process an Excel file - each sheet becomes a graph tab
+        function handleExcelFile(file) {
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+
+                    if (workbook.SheetNames.length === 0) {
+                        alert('No sheets found in the Excel file.');
+                        return;
+                    }
+
+                    // Use file name (without extension) as project name
+                    const fileName = file.name.replace(/\.[^/.]+$/, '');
+                    projectName = fileName;
+                    document.getElementById('projectTitle').textContent = projectName;
+
+                    let sheetsProcessed = 0;
+
+                    workbook.SheetNames.forEach((sheetName) => {
+                        const worksheet = workbook.Sheets[sheetName];
+                        const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+
+                        // Skip empty sheets
+                        if (!sheetData || sheetData.length < 2) return;
+
+                        // Convert sheet data to tab-separated text (the format parseAndPlot expects)
+                        const tsvLines = sheetData
+                            .filter(row => row.some(cell => cell !== ''))
+                            .map(row => row.map(cell => cell.toString().trim()).join('\t'));
+                        const tsvText = tsvLines.join('\n');
+
+                        if (!tsvText.trim()) return;
+
+                        // Create a new tab for this sheet
+                        tabCounter++;
+                        const tabId = 'tab_' + tabCounter;
+
+                        const tab = {
+                            id: tabId,
+                            name: sheetName,
+                            data: null,
+                            graphTitle: sheetName,
+                            yAxisLabel: 'Green Coverage (%)',
+                            xAxisLabel: 'Assessment Date',
+                            yAxisMin: 0,
+                            yAxisMax: 100,
+                            yAxisPercent: true,
+                            treatments: [],
+                            dates: [],
+                            currentDateIndex: 0,
+                            legendAscending: true,
+                            reportMode: false,
+                            chartType: 'line',
+                            hiddenTreatments: new Set()
+                        };
+
+                        tabs.push(tab);
+                        createTabContent(tab);
+
+                        // Set the graph title to sheet name
+                        document.getElementById('graphTitle_' + tabId).value = sheetName;
+
+                        // Unlock the textarea and populate with data
+                        const overlay = document.getElementById('passwordOverlay_' + tabId);
+                        const textarea = document.getElementById('dataInput_' + tabId);
+                        overlay.style.display = 'none';
+                        textarea.classList.remove('locked');
+                        textarea.disabled = false;
+                        textarea.value = tsvText;
+
+                        // Parse the data to get treatments (needed for auto-range)
+                        parseAndPlot(tabId);
+
+                        // Auto-detect Y axis range from the actual data
+                        if (tab.treatments.length > 0) {
+                            const allValues = tab.treatments.flatMap(t => t.values).filter(v => !isNaN(v));
+                            if (allValues.length > 0) {
+                                const minVal = Math.min(...allValues);
+                                const maxVal = Math.max(...allValues);
+
+                                // Add some padding (10% on each side)
+                                const range = maxVal - minVal || 1;
+                                let yMin = Math.floor((minVal - range * 0.1) * 10) / 10;
+                                let yMax = Math.ceil((maxVal + range * 0.1) * 10) / 10;
+
+                                // Round to nice numbers
+                                if (range > 10) {
+                                    yMin = Math.floor(yMin / 5) * 5;
+                                    yMax = Math.ceil(yMax / 5) * 5;
+                                }
+
+                                // Clamp min to 0 if data is all positive
+                                if (minVal >= 0) yMin = Math.max(0, yMin);
+
+                                // Detect if values look like percentages
+                                const looksLikePercent = yMax <= 100 && yMin >= 0;
+
+                                tab.yAxisMin = yMin;
+                                tab.yAxisMax = yMax;
+                                tab.yAxisPercent = looksLikePercent;
+
+                                document.getElementById('yAxisMin_' + tabId).value = yMin;
+                                document.getElementById('yAxisMax_' + tabId).value = yMax;
+
+                                const percentBtn = document.getElementById('yAxisPercent_' + tabId);
+                                if (looksLikePercent) {
+                                    percentBtn.classList.add('active');
+                                } else {
+                                    percentBtn.classList.remove('active');
+                                }
+
+                                // Re-render graph with correct axis range
+                                createGraph(tabId);
+                                updateLegend(tabId, 0);
+                                addTimelineLine(tabId, 0);
+                            }
+                        }
+
+                        sheetsProcessed++;
+                    });
+
+                    if (sheetsProcessed === 0) {
+                        alert('No valid data found in the Excel file. Ensure each sheet has a header row and at least one data row.');
+                        return;
+                    }
+
+                    renderTabs();
+                    updateTabCount();
+
+                    // Switch to the first newly created tab
+                    if (tabs.length > 0) {
+                        switchToTab(tabs[tabs.length - sheetsProcessed].id);
+                    }
+
+                    autoSave();
+
+                } catch (err) {
+                    console.error('Excel import error:', err);
+                    alert('Failed to import Excel file: ' + err.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
     </script>
 </body>
 </html>
