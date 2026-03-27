@@ -1930,6 +1930,21 @@
             document.getElementById('tabCount').textContent = count + ' graph' + (count !== 1 ? 's' : '') + ' ready';
         }
 
+        function excelSerialToDate(serial) {
+            serial = Number(serial);
+            // Adjust for Excel's Lotus 123 bug (Feb 29, 1900 doesn't exist)
+            if (serial > 60) serial--;
+            const date = new Date(Date.UTC(1900, 0, serial));
+            const d = String(date.getUTCDate()).padStart(2, '0');
+            const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+            const y = String(date.getUTCFullYear()).slice(-2);
+            return d + '/' + m + '/' + y;
+        }
+
+        function isExcelDateSerial(val) {
+            return val.match(/^\d{5}$/) && Number(val) >= 1 && Number(val) <= 73050;
+        }
+
         function parseAndPlot(tabId) {
             const tab = tabs.find(t => t.id === tabId);
             const input = document.getElementById('dataInput_' + tabId).value.trim();
@@ -1960,7 +1975,7 @@
                 for (let i = 0; i < headerParts.length; i++) {
                     const val = headerParts[i];
                     // Match date patterns: dd.mm.yy, dd/mm/yy, dd-mm-yy, or DAT patterns
-                    if (val && (val.match(/^\d{1,2}[.\/-]\d{1,2}[.\/-]\d{2,4}$/) || val.match(/^\d+DAT/i))) {
+                    if (val && (val.match(/^\d{1,2}[.\/-]\d{1,2}[.\/-]\d{2,4}$/) || val.match(/^\d+DAT/i) || isExcelDateSerial(val))) {
                         firstDataCol = i;
                         break;
                     }
@@ -1972,7 +1987,7 @@
                     const val = headerParts[i];
                     // Accept dates or DAT patterns, skip empty or letter-only headers
                     if (val && !val.match(/^[a-z]+$/i)) {
-                        dates.push(val);
+                        dates.push(isExcelDateSerial(val) ? excelSerialToDate(val) : val);
                     }
                 }
 
