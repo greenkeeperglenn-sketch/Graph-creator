@@ -1988,7 +1988,10 @@
                     let name = nameParts.join(' - ');
                     
                     if (!name) continue;
-                    
+
+                    // Stop parsing if we hit a repeated header row (second table pasted below)
+                    if (headerParts[0] && name.toLowerCase() === headerParts[0].toLowerCase()) break;
+
                     // Skip statistical rows and DAT header rows
                     if (name.match(/^(P|LSD|d\.f\.|%c\.v\.|SED|CV|DAT)$/i)) continue;
                     if (name.split(/\s*-\s*/).every(p => /^\d*DAT\d*$/i.test(p))) continue;
